@@ -5,15 +5,10 @@ General idea: we corrupt a libc `_IO_FILE_plus` struct to achieve arbitrary func
 ## Workflow
 
 1. Corrupt the vtable of \_IO_FILE_plus struct so an `fwrite`/`fputs` dispatch (`vtable + 0x38`, `__xsputn`) lands where we want. This alone would be an arbitrary call, except libc validates the vtable pointer (https://elixir.bootlin.com/glibc/glibc-2.31/source/libio/libioP.h#L935).
-
    The check is only a range check against the `__libc_IO_vtables` section, with no alignment requirement. So we keep the pointer inside that section but shift it to call `_IO_wfile_overflow` instead of the intended function.
-
 2. `_IO_wfile_overflow` calls `_IO_wdoallocbuf`.
-
-3. `_IO_wdoallocbuf` reads the `_wide_data` field of the file struct and dispatches through `_wide_data->_wide_vtable`. (https://elixir.bootlin.com/glibc/glibc-2.31/source/libio/libio.h#L144)
-
-4. It calls `_wide_vtable + 0x68` (`__doallocate`) with **no pointer validation**. This is the hole!
-
+3. `_IO_wdoallocbuf` reads the `_wide_data` field of the file struct and dispatches through \_wide_data->\_wide_vtable. (https://elixir.bootlin.com/glibc/glibc-2.31/source/libio/libio.h#L144)
+4. It calls `_wide_vtable + 0x68` with no pointer validation. This is the hole!
 5. We forge `_wide_vtable` so that `_wide_vtable + 0x68` holds a pointer to the function we want to call.
 
 ## Memory layout
@@ -27,9 +22,7 @@ A full `_IO_FILE_plus` + a full `_IO_wide_data`, each with its own vtable, would
 There are some constraints on that data:
 
 1. Don't clobber `_lock` (offset `0x88`): `_lock` must point to a writable, zeroed qword so the lock can be acquired.
-
 2. Offset `0` is `_flags` (4 bytes). The normal `_IO_MAGIC` high bytes are not checked, so we can use them, but two bits in the low byte must be clear:
    - `_IO_UNBUFFERED` (`0x2`)
    - `_IO_NO_WRITES` (`0x8`)
-
-   Either one set kills the chain. Luckily, two space bytes (`b"\x20\x20"`) keep both bits clear, so an argument like `b"  /bin/sh"` is valid!
+     Either one set kills the chain. Luckily, two space bytes (`b"\x20\x20"`) keep both bits clear, so an argument like `b"  /bin/sh"` is valid!
