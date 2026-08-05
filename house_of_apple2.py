@@ -115,9 +115,6 @@ class HouseOfApple2:
             + struct.pack("<Q", wide_data_vtable)
         )
 
-    def _write_first_arg(self, overlapped_struct, value):
-        return struct.pack("<Q", value) + overlapped_struct[8:]
-
     def _place_arg(self, overlapped_struct, arg):
         if arg is None:
             return overlapped_struct
