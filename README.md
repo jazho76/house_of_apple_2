@@ -25,4 +25,5 @@ There are some constraints on that data:
 2. Offset `0` is `_flags` (4 bytes). The normal `_IO_MAGIC` high bytes are not checked, so we can use them, but two bits in the low byte must be clear:
    - `_IO_UNBUFFERED` (`0x2`)
    - `_IO_NO_WRITES` (`0x8`)
-     Either one set kills the chain. Luckily, two space bytes (`b"\x20\x20"`) keep both bits clear, so an argument like `b"  /bin/sh"` is valid!
+
+Either one set kills the chain. Luckily, two space bytes (`b"\x20\x20"`) keep both bits clear, so an argument like `b"  /bin/sh"` is valid!
