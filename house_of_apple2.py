@@ -5,7 +5,7 @@ import struct
 # General idea: we corrupt a libc _IO_FILE_plus struct to achieve
 # arbitrary function execution.
 #
-# Workflow:
+# Example path with fwrite:
 # 1. Corrupt the vtable so an fwrite/fputs dispatch (vtable + 0x38,
 #    __xsputn) lands where we want. This alone would be arbitrary call,
 #    except libc validates the vtable pointer:
