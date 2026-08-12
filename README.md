@@ -1,6 +1,6 @@
 # House of Apple 2
 
-General idea: we corrupt a libc `_IO_FILE_plus` struct to achieve arbitrary function execution.
+FSOP: File Stream Oriented Programming. General idea, abuse the vtable dispatch of \_IO_FILE_PLUS structs to achieve arbitrary function calls.
 
 ## Start sandbox
 
