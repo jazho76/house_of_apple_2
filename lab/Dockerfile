@@ -7,31 +7,30 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     && pip3 install --no-cache-dir --break-system-packages pwntools \
     && rm -rf /var/lib/apt/lists/*
 
-RUN useradd -m -s /bin/bash ctf
+RUN userdel -r ubuntu 2>/dev/null; groupadd -g 1000 user && useradd -m -s /bin/bash -u 1000 -g 1000 user
 
 RUN git clone --depth 1 https://github.com/pwndbg/pwndbg /opt/pwndbg \
     && cd /opt/pwndbg && ./setup.sh \
     && mkdir -p /etc/gdb \
     && echo "source /opt/pwndbg/gdbinit.py" > /etc/gdb/gdbinit \
-    && chown -R ctf:ctf /opt/pwndbg
+    && chown -R user:user /opt/pwndbg
 
 ENV LANG=C.UTF-8
 
 WORKDIR /lab
 
-COPY Makefile   /lab/Makefile
-COPY README.md  /lab/README.md
-COPY pwn.conf   /home/ctf/.pwn.conf
-COPY gdbinit    /home/ctf/.gdbinit
+COPY Makefile     /lab/Makefile
+COPY src/target.c /lab/target.c
+COPY pwn.conf     /home/user/.pwn.conf
+COPY gdbinit      /home/user/.gdbinit
 
-RUN --mount=type=bind,source=src/lab.c,target=/lab/src/lab.c \
-    make -C /lab build \
-    && chown ctf:ctf /lab /lab/lab /lab/Makefile /lab/README.md \
-    && chown ctf:ctf /home/ctf/.pwn.conf /home/ctf/.gdbinit
-USER ctf
+RUN make -C /lab build \
+    && chown user:user /lab /lab/target /lab/target.c /lab/Makefile \
+    && chown user:user /home/user/.pwn.conf /home/user/.gdbinit
+USER user
 
-RUN mkdir -p /home/ctf/.local/share /home/ctf/.local/state /home/ctf/.cache
+RUN mkdir -p /home/user/.local/share /home/user/.local/state /home/user/.cache
 
-RUN gdb --batch -ex quit /lab/lab >/dev/null 2>&1 || true
+RUN gdb --batch -ex quit /lab/target >/dev/null 2>&1 || true
 
 CMD ["bash"]

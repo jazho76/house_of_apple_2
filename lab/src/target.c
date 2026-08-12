@@ -128,9 +128,10 @@ static void overwrite(FILE *f, const char *name)
 {
     printf("[*] overwriting %s\n", name);
     dump_file(f);
-    printf("[*] reading 0x%x bytes over the struct...\n", OVERWRITE_SZ);
-    ssize_t n = read_full(f, OVERWRITE_SZ);
+    printf("[*] reading up to 0x%x bytes over the struct...\n", OVERWRITE_SZ);
+    ssize_t n = read(0, f, OVERWRITE_SZ);
     printf("[+] wrote %zd bytes over %s @ %p\n", n, name, (void *)f);
+    dump_file(f);
 }
 
 static void op_fopen(void)
@@ -220,6 +221,12 @@ static void menu(void)
            " 5) inspect(i)          0) quit\n");
 }
 
+void win(void)
+{
+    static const char msg[] = "[win] control flow hijacked\n";
+    write(1, msg, sizeof msg - 1);
+}
+
 int main(void)
 {
     setvbuf(stdout, NULL, _IONBF, 0);
@@ -258,3 +265,4 @@ int main(void)
         }
     }
 }
+
