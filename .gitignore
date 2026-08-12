@@ -1,3 +1,4 @@
 target
 *.o
+__pycache__
 /tmp/filestruct_lab_*
