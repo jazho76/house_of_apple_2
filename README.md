@@ -2,6 +2,13 @@
 
 General idea: we corrupt a libc `_IO_FILE_plus` struct to achieve arbitrary function execution.
 
+## Start sandbox
+
+```
+./build.sh
+./run.sh
+```
+
 ## fwrite payload path
 
 1. Corrupt the vtable of \_IO_FILE_plus struct so an `fwrite`/`fputs` dispatch (`vtable + 0x38`, `__xsputn`) lands where we want. This alone would be an arbitrary call, except libc validates the vtable pointer (https://elixir.bootlin.com/glibc/glibc-2.31/source/libio/libioP.h#L935).
