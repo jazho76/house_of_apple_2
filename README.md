@@ -1,5 +1,7 @@
 # House of Apple 2
 
+**Note**: WIP. This explanation still needs some corrections and improvements.
+
 **FSOP: File Stream Oriented Programming**. The general idea is to abuse the vtable dispatch of \_IO_FILE_PLUS structs to achieve arbitrary function calls. This can potentially be escalated into a stack pivoting and ROP (can it?). All experiments done in latest glibc 2.43.
 
 ## Sandbox environment
