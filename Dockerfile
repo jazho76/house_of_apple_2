@@ -1,8 +1,8 @@
-FROM ubuntu:24.04
+FROM ubuntu:26.04
 
 ENV DEBIAN_FRONTEND=noninteractive
 RUN apt-get update && apt-get install -y --no-install-recommends \
-        gcc libc6-dev make gdb git curl ca-certificates tmux neovim \
+        gcc libc6-dev make cmake pkg-config gdb git curl ca-certificates tmux neovim \
         python3 python3-pip python3-dev \
     && pip3 install --no-cache-dir --break-system-packages pwntools \
     && rm -rf /var/lib/apt/lists/*
