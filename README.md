@@ -447,7 +447,12 @@ So, the general idea will be to corrupt the vtable in \_IO_FILE_plus to point to
 Just a few considerations before trying our next execution, back to the \_IO_wfile_overflow source code, there are some preconditions for this function to take the \_IO_wdoallocbuf path:
 
 - \_flags has no \_IO_NO_WRITES (0x0008) flag set
-- wide_data->\_IO_write_base is NULL
+- wide_data->\_IO_write_base has to be NULL
+
+Inside \_IO_wdoallocbuf iself:
+
+- fp->\_wide_data->\_IO_buf_base has to be NULL
+- \_flags has no \_IO_UNBUFFERED (0x0002) flag set
 
 Also, there is a `_lock` field in \_IO_FILE. This will be dereferenced for reading and writing to adquire the lock on a multithreading context. We need to make sure this field points to a zero value in a writable memory region.
 
