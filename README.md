@@ -8,6 +8,10 @@
 
 This repository is a self-contained playground I built after completing the [pwn.college File Struct Exploitation module](https://pwn.college/software-exploitation/file-struct-exploits/). The module is great, but after finishing it I wanted to explore how these techniques translate to the latest versions of glibc. All experiments here use glibc 2.43, shipped with the latest distros available at the time of writing, such as Ubuntu 26.04 and Fedora Workstation 44.
 
+## Exploitation prerequisites
+
+This exploration assumes that we can overwrite a `FILE` structure and that we have both, a heap leak and a libc leak. The target binary already provides this.
+
 ## Sandbox environment
 
 The sandbox runs Ubuntu 26.04 LTS, giving us a modern environment to explore the technique.
