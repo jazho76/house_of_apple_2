@@ -29,53 +29,7 @@ Build and run the sandbox with:
 
 Let's start by inspecting the `_IO_FILE` and `_IO_FILE_plus` structures:
 
-```c
-pwndbg> ptype struct _IO_FILE
-type = struct _IO_FILE {
-    int _flags;
-    char *_IO_read_ptr;
-    char *_IO_read_end;
-    char *_IO_read_base;
-    char *_IO_write_base;
-    char *_IO_write_ptr;
-    char *_IO_write_end;
-    char *_IO_buf_base;
-    char *_IO_buf_end;
-    char *_IO_save_base;
-    char *_IO_backup_base;
-    char *_IO_save_end;
-    struct _IO_marker *_markers;
-    struct _IO_FILE *_chain;
-    int _fileno;
-    int _flags2 : 24;
-    char _short_backupbuf[1];
-    __off_t _old_offset;
-    unsigned short _cur_column;
-    signed char _vtable_offset;
-    char _shortbuf[1];
-    _IO_lock_t *_lock;
-    __off64_t _offset;
-    struct _IO_codecvt *_codecvt;
-    struct _IO_wide_data *_wide_data;
-    struct _IO_FILE *_freeres_list;
-    void *_freeres_buf;
-    struct _IO_FILE **_prevchain;
-    int _mode;
-    int _unused3;
-    __uint64_t _total_written;
-    char _unused2[8];
-}
-
-```
-
-```c
-pwndbg> ptype struct _IO_FILE_plus
-type = struct _IO_FILE_plus {
-    FILE file;
-    const struct _IO_jump_t *vtable;
-}
-
-```
+![1](./images/1.png)
 
 In practical terms, `_IO_FILE_plus` is an `_IO_FILE` with a vtable pointer. That immediately looks interesting: if we can control this pointer, we may be able to redirect an indirect call and hijack control flow.
 
@@ -83,37 +37,11 @@ In practical terms, `_IO_FILE_plus` is an `_IO_FILE` with a vtable pointer. That
 
 To inspect the vtable, let's examine a `FILE` pointer returned by `fopen`.
 
-```c
-pwndbg> x/a ((struct _IO_FILE_plus *)0x87b8010)->vtable
-0x7f91cc001030 <_IO_file_jumps>:        0x0
-```
+![2](./images/2.png)
 
 The pointer targets the `_IO_file_jumps` table.
 
-```c
-pwndbg> tele &_IO_file_jumps 21
-00:0000│     0x7f91cc001030 (_IO_file_jumps) ◂— 0
-01:0008│     0x7f91cc001038 (_IO_file_jumps+8) ◂— 0
-02:0010│     0x7f91cc001040 (_IO_file_jumps+16) —▸ 0x7f91cbe89120 (_IO_file_finish) ◂— endbr64
-03:0018│     0x7f91cc001048 (_IO_file_jumps+24) —▸ 0x7f91cbe8a730 (_IO_file_overflow) ◂— endbr64
-04:0020│     0x7f91cc001050 (_IO_file_jumps+32) —▸ 0x7f91cbe89f30 (_IO_file_underflow) ◂— endbr64
-05:0028│     0x7f91cc001058 (_IO_file_jumps+40) —▸ 0x7f91cbe8d2c0 (_IO_default_uflow) ◂— endbr64
-06:0030│     0x7f91cc001060 (_IO_file_jumps+48) —▸ 0x7f91cbe8ed00 (_IO_default_pbackfail) ◂— endbr64
-07:0038│     0x7f91cc001068 (_IO_file_jumps+56) —▸ 0x7f91cbe8b400 (_IO_file_xsputn) ◂— endbr64
-08:0040│     0x7f91cc001070 (_IO_file_jumps+64) —▸ 0x7f91cbe8b7b0 (__GI__IO_file_xsgetn) ◂— endbr64
-09:0048│     0x7f91cc001078 (_IO_file_jumps+72) —▸ 0x7f91cbe8aaf0 (_IO_file_seekoff) ◂— endbr64
-0a:0050│     0x7f91cc001080 (_IO_file_jumps+80) —▸ 0x7f91cbe8d9e0 (_IO_default_seekpos) ◂— endbr64
-0b:0058│     0x7f91cc001088 (_IO_file_jumps+88) —▸ 0x7f91cbe89cb0 (_IO_file_setbuf) ◂— endbr64
-0c:0060│     0x7f91cc001090 (_IO_file_jumps+96) —▸ 0x7f91cbe8a940 (_IO_file_sync) ◂— endbr64
-0d:0068│     0x7f91cc001098 (_IO_file_jumps+104) —▸ 0x7f91cbe7bc00 (_IO_file_doallocate) ◂— endbr64
-0e:0070│     0x7f91cc0010a0 (_IO_file_jumps+112) —▸ 0x7f91cbe8b2c0 (_IO_file_read) ◂— endbr64
-0f:0078│     0x7f91cc0010a8 (_IO_file_jumps+120) —▸ 0x7f91cbe8b350 (_IO_file_write) ◂— endbr64
-10:0080│     0x7f91cc0010b0 (_IO_file_jumps+128) —▸ 0x7f91cbe8b2e0 (_IO_file_seek) ◂— endbr64
-11:0088│     0x7f91cc0010b8 (_IO_file_jumps+136) —▸ 0x7f91cbe8b340 (_IO_file_close) ◂— endbr64
-12:0090│     0x7f91cc0010c0 (_IO_file_jumps+144) —▸ 0x7f91cbe8b2f0 (_IO_file_stat) ◂— endbr64
-13:0098│     0x7f91cc0010c8 (_IO_file_jumps+152) —▸ 0x7f91cbe8eef0 (_IO_default_showmanyc) ◂— endbr64
-14:00a0│     0x7f91cc0010d0 (_IO_file_jumps+160) —▸ 0x7f91cbe8ef00 (_IO_default_imbue) ◂— endbr64
-```
+![3](./images/3.png)
 
 This is a set of 21 function pointers. File stream operations dispatch through different entries depending on the execution path.
 
