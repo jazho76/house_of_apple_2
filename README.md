@@ -1,6 +1,4 @@
-# House of Apple 2
-
-> **Note:** This article is a work in progress. Some sections still require technical corrections and further refinement.
+# Exploring House of Apple 2 on glibc 2.43
 
 **File Stream Oriented Programming (FSOP).** This is about abusing glibc file stream structures to hijack control flow. One way to do this is by corrupting the vtable dispatch mechanism of `_IO_FILE_plus`. Modern glibc validates this vtable, so the obvious approach of replacing it with an arbitrary address doesn't work.
 
