@@ -427,4 +427,4 @@ We have now achieved arbitrary code execution.
 
 ## Conclusion
 
-The interesting part of House of Apple 2 is not only the arbitrary-call primitive, but also how several legitimate pieces of glibc fit together: a validated vtable, the wide-character stream machinery, an unvalidated secondary vtable and a controlled `FILE` structure. Together they allow us to move from an arbitrary call to a stack pivot and finally to arbitrary code execution through ROP.
+House of Apple 2 shows how a valid glibc vtable can reach the wide-character machinery and dispatch through an unvalidated secondary vtable. The same path remains reproducible on the glibc 2.43 build used by the sandbox. Although layouts, offsets and gadgets may change between builds, the underlying control-flow idea still applies.
