@@ -2,7 +2,7 @@
 
 **Note**: WIP. This explanation still needs some corrections and improvements.
 
-**FSOP: File Stream Oriented Programming**. The general idea is to abuse the vtable dispatch of \_IO_FILE_PLUS structs to achieve arbitrary function calls. This can potentially be escalated into a stack pivoting and ROP. All experiments done in latest glibc 2.43.
+**FSOP: File Stream Oriented Programming**. The general idea is to abuse the vtable dispatch of `_IO_FILE_plus` structs to achieve arbitrary function calls. This can potentially be escalated into a stack pivoting and ROP. All experiments done in latest glibc at the time of writing (2.43).
 
 ## Sandbox environment
 
@@ -17,7 +17,7 @@ To build and run the sandbox.
 
 ## Exploration
 
-Let's start by inspecting \_IO_FILE and \_IO_FILE_plus structs. This is the struct returned by fopen to deal with file streams.
+Let's start by inspecting \_IO_FILE and \_IO_FILE_plus structs.
 
 ```c
 pwndbg> ptype struct _IO_FILE
@@ -67,7 +67,7 @@ type = struct _IO_FILE_plus {
 
 ```
 
-\_IO_FILE_plus is just a FILE with a vtable. A vtable is always an oportunity to hijack the control flow. By controlling the vtable pointer we can decide where to jump in an indirect function call.
+Practically speaking, \_IO_FILE_plus is an \_IO_FILE with a vtable. A vtable is always an oportunity to hijack the control flow. By controlling the vtable pointer, we can decide where to jump in an indirect function call.
 
 Let's explore this vtable by inspecting a FILE pointer returned by fopen.
 
@@ -250,7 +250,7 @@ Looks like there is no symbol for this function, it might be inlined in fwrite. 
    0x00007f641fc9d620 <+192>:   ja     0x7f641fc9d780 <__GI__IO_fwrite+544>
 ```
 
-Then, a valid pointer should be between \_\_io_tables and \_\_io_tables+0x92f. This means that we can not use an arbitrary function pointer, but there is a lot of space to explore.
+Then, a valid pointer should be `[__io_vtables, __io_vtables + IO_VTABLES_LEN]`. This means that we can not use an arbitrary function pointer, but there is a lot of valid space to explore.
 
 All the valid range
 
@@ -410,7 +410,7 @@ pwndbg> x/15i _IO_wdoallocbuf
    0x7f7c3a535057 <__GI__IO_wdoallocbuf+55>:    call   QWORD PTR [rax+0x68]
 ```
 
-This is where the magic is happening, on \_IO_wdoallocbuf+44 we are dereferencing the vtable field of the struct, and in \_IO_wdoallocbuf+55 we're performing an indirect call to vtable+0x68, no validation this time.
+This is where the magic is happening, on \_IO_wdoallocbuf+44 we are dereferencing the wide_data vtable, and in \_IO_wdoallocbuf+55 we're performing an indirect call to vtable+0x68, no range validation this time.
 
 We were dealing with the vtable of \_IO_FILE_plus a moment ago, and now we jumped to this other struct that contains an insecure indeirect call. Time to connect the dots. The important note is that \_IO_wfile_overflow is part of other jumps table referenced as `_IO_wfile_jumps`, and this table is within the valid range of the initial vtable validation.
 
@@ -609,7 +609,7 @@ pwndbg> tele 0x7f4672919d00 1
 00:0000│     0x7f4672919d00 (_nl_archive_subfreeres+96) ◂— ret
 ```
 
-Second limitation is that \_IO_write_base has to be null, so we can't place a gadget address there, we can workaround it by popping a 0x0 into a register. Third limitation is that \_IO_buf_base has to be null, we can apply the same approach as in \_IO_write_base. The final limitation is that we can't overwrite the lock field, this is at offset 0x88, so we have 0x88/0x8 = 17 gadgets to ROP. That is planty of space. This the layout of our ROP chain in ace.py:
+Second limitation is that \_IO_write_base has to be null, so we can't place a gadget address there, we can workaround it by popping a 0x0 into a register. Third limitation is that \_IO_buf_base has to be null, we can apply the same approach as in \_IO_write_base. The final limitation is that we can't overwrite the lock field, this is at offset 0x88, so we have 0x88/0x8 = 17 qwords to ROP. That is plenty of space. This the layout of our ROP chain in ace.py:
 
 ```
 0x00: _nl_archive_subfreeres+96 # pointer to ret instruction with least significant byte as 0x00
@@ -621,7 +621,7 @@ Second limitation is that \_IO_write_base has to be null, so we can't place a ga
 0x30: pop rsi gadget
 0x38: 0x0000000000000000	# _IO_buf_base as NULL
 0x40: pop rdi gadget
-0x45: "/bin/sh" string in libc
+0x48: "/bin/sh" string in libc
 0x50: address to execve		# call execve("/bin/sh", NULL)
 ```
 
