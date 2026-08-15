@@ -571,9 +571,9 @@ While we are here, just before the last indirect call, notice the state of the r
 
 RDI, RDX are pointing to the first byte of the FILE struct. So, rdi = pointer to memory we control. If the target function dereferences this pointer, we can place the pointed data at offset 0x0 of the file struct and control the first and third argument.
 
-## Synthetizing
+## Synthetizing the primitive
 
-This primitive is synthetized in `./exp/house_of_apple2.py`
+This primitive is synthetized in [./exp/house_of_apple2.py](./exp/house_of_apple2.py). A full `_IO_FILE_plus` + a full `_IO_wide_data`, each with its own vtable, would require a large buffer. Instead, in this implementation we overlap both structures and the fake `_wide_data` vtable.
 
 ## Stack pivoting
 
