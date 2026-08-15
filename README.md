@@ -602,11 +602,7 @@ pwndbg> tele 0x7f4672919d00 1
 00:0000│     0x7f4672919d00 (_nl_archive_subfreeres+96) ◂— ret
 ```
 
-The second limitation is that \_IO_write_base has to be null, so we can't place a gadget address there, we can workaround it by popping a 0x0 into a register.
-
-There is a third limitation we haven't mentioned, it is that \_IO_buf_base can not be 0x0, we can apply the same approach as in \_IO_write_base.
-
-The final limitation is that we can't overwrite the lock field, this is at offset 0x88, so we have 0x88/0x8 = 17 gadgets to ROP. That is planty of space. This the layout of our ROP chain in ace.py:
+Second limitation is that \_IO_write_base has to be null, so we can't place a gadget address there, we can workaround it by popping a 0x0 into a register. Third limitation is that \_IO_buf_base has to be null, we can apply the same approach as in \_IO_write_base. The final limitation is that we can't overwrite the lock field, this is at offset 0x88, so we have 0x88/0x8 = 17 gadgets to ROP. That is planty of space. This the layout of our ROP chain in ace.py:
 
 ```
 0x00: _nl_archive_subfreeres+96 # pointer to ret instruction with least significant byte as 0x00
