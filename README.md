@@ -279,24 +279,7 @@ _IO_wdoallocbuf (FILE *fp)
 
 `_IO_WDOALLOCATE` is another dispatch macro, this time operating through the wide vtable. The indirect call becomes clear in the disassembly:
 
-```asm
-pwndbg> x/15i _IO_wdoallocbuf
-   0x7f7c3a535020 <__GI__IO_wdoallocbuf>:       endbr64
-   0x7f7c3a535024 <__GI__IO_wdoallocbuf+4>:     mov    rax,QWORD PTR [rdi+0xa0]
-   0x7f7c3a53502b <__GI__IO_wdoallocbuf+11>:    cmp    QWORD PTR [rax+0x30],0x0
-   0x7f7c3a535030 <__GI__IO_wdoallocbuf+16>:    je     0x7f7c3a535038 <__GI__IO_wdoallocbuf+24>
-   0x7f7c3a535032 <__GI__IO_wdoallocbuf+18>:    ret
-   0x7f7c3a535033 <__GI__IO_wdoallocbuf+19>:    nop    DWORD PTR [rax+rax*1+0x0]
-   0x7f7c3a535038 <__GI__IO_wdoallocbuf+24>:    push   rbp
-   0x7f7c3a535039 <__GI__IO_wdoallocbuf+25>:    mov    rdx,rdi
-   0x7f7c3a53503c <__GI__IO_wdoallocbuf+28>:    mov    rbp,rsp
-   0x7f7c3a53503f <__GI__IO_wdoallocbuf+31>:    sub    rsp,0x20
-   0x7f7c3a535043 <__GI__IO_wdoallocbuf+35>:    test   BYTE PTR [rdi],0x2
-   0x7f7c3a535046 <__GI__IO_wdoallocbuf+38>:    jne    0x7f7c3a5350e0 <__GI__IO_wdoallocbuf+192>
-   0x7f7c3a53504c <__GI__IO_wdoallocbuf+44>:    mov    rax,QWORD PTR [rax+0xe0]
-   0x7f7c3a535053 <__GI__IO_wdoallocbuf+51>:    mov    QWORD PTR [rbp-0x8],rdi
-   0x7f7c3a535057 <__GI__IO_wdoallocbuf+55>:    call   QWORD PTR [rax+0x68]
-```
+![8](./images/8.png)
 
 Here is the interesting part. At `_IO_wdoallocbuf+44` glibc loads the `_wide_vtable` pointer from `_wide_data`. At `_IO_wdoallocbuf+55` it calls the function pointer at `_wide_vtable + 0x68`. This time there is no range validation.
 
@@ -304,30 +287,7 @@ Here is the interesting part. At `_IO_wdoallocbuf+44` glibc loads the `_wide_vta
 
 Now the pieces start to connect. `_IO_wfile_overflow` belongs to `_IO_wfile_jumps` which exists inside the valid range accepted by the first vtable check. From there, execution can reach another indirect call through the unvalidated `_wide_vtable`.
 
-```asm
-pwndbg> tele &_IO_wfile_jumps 21
-00:0000│     0x7f7c3a6b4228 (_IO_wfile_jumps) ◂— 0
-01:0008│     0x7f7c3a6b4230 (_IO_wfile_jumps+8) ◂— 0
-02:0010│     0x7f7c3a6b4238 (_IO_wfile_jumps+16) —▸ 0x7f7c3a53c120 (_IO_file_finish) ◂— endbr64
-03:0018│     0x7f7c3a6b4240 (_IO_wfile_jumps+24) —▸ 0x7f7c3a537110 (_IO_wfile_overflow) ◂— endbr64
-04:0020│     0x7f7c3a6b4248 (_IO_wfile_jumps+32) —▸ 0x7f7c3a5368c0 (_IO_wfile_underflow) ◂— endbr64
-05:0028│     0x7f7c3a6b4250 (_IO_wfile_jumps+40) —▸ 0x7f7c3a534cb0 (_IO_wdefault_uflow) ◂— endbr64
-06:0030│     0x7f7c3a6b4258 (_IO_wfile_jumps+48) —▸ 0x7f7c3a534a50 (_IO_wdefault_pbackfail) ◂— endbr64
-07:0038│     0x7f7c3a6b4260 (_IO_wfile_jumps+56) —▸ 0x7f7c3a537e40 (_IO_wfile_xsputn) ◂— endbr64
-08:0040│     0x7f7c3a6b4268 (_IO_wfile_jumps+64) —▸ 0x7f7c3a53e7b0 (__GI__IO_file_xsgetn) ◂— endbr64
-09:0048│     0x7f7c3a6b4270 (_IO_wfile_jumps+72) —▸ 0x7f7c3a537550 (_IO_wfile_seekoff) ◂— endbr64
-0a:0050│     0x7f7c3a6b4278 (_IO_wfile_jumps+80) —▸ 0x7f7c3a5409e0 (_IO_default_seekpos) ◂— endbr64
-0b:0058│     0x7f7c3a6b4280 (_IO_wfile_jumps+88) —▸ 0x7f7c3a53ccb0 (_IO_file_setbuf) ◂— endbr64
-0c:0060│     0x7f7c3a6b4288 (_IO_wfile_jumps+96) —▸ 0x7f7c3a5373b0 (_IO_wfile_sync) ◂— endbr64
-0d:0068│     0x7f7c3a6b4290 (_IO_wfile_jumps+104) —▸ 0x7f7c3a5304d0 (_IO_wfile_doallocate) ◂— endbr64
-0e:0070│     0x7f7c3a6b4298 (_IO_wfile_jumps+112) —▸ 0x7f7c3a53e2c0 (_IO_file_read) ◂— endbr64
-0f:0078│     0x7f7c3a6b42a0 (_IO_wfile_jumps+120) —▸ 0x7f7c3a53e350 (_IO_file_write) ◂— endbr64
-10:0080│     0x7f7c3a6b42a8 (_IO_wfile_jumps+128) —▸ 0x7f7c3a53e2e0 (_IO_file_seek) ◂— endbr64
-11:0088│     0x7f7c3a6b42b0 (_IO_wfile_jumps+136) —▸ 0x7f7c3a53e340 (_IO_file_close) ◂— endbr64
-12:0090│     0x7f7c3a6b42b8 (_IO_wfile_jumps+144) —▸ 0x7f7c3a53e2f0 (_IO_file_stat) ◂— endbr64
-13:0098│     0x7f7c3a6b42c0 (_IO_wfile_jumps+152) —▸ 0x7f7c3a541ef0 (_IO_default_showmanyc) ◂— endbr64
-14:00a0│     0x7f7c3a6b42c8 (_IO_wfile_jumps+160) —▸ 0x7f7c3a541f00 (_IO_default_imbue) ◂— endbr64
-```
+![9](./images/9.png)
 
 ```c
 pwndbg> p &__io_vtables < &_IO_wfile_jumps < (void *)&__io_vtables+0x92f
