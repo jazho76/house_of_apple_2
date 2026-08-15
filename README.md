@@ -29,7 +29,48 @@ Build and run the sandbox with:
 
 Let's start by inspecting the `_IO_FILE` and `_IO_FILE_plus` structures:
 
-![1](./images/1.png)
+```c
+pwndbg> ptype struct _IO_FILE
+type = struct _IO_FILE {
+    int _flags;
+    char *_IO_read_ptr;
+    char *_IO_read_end;
+    char *_IO_read_base;
+    char *_IO_write_base;
+    char *_IO_write_ptr;
+    char *_IO_write_end;
+    char *_IO_buf_base;
+    char *_IO_buf_end;
+    char *_IO_save_base;
+    char *_IO_backup_base;
+    char *_IO_save_end;
+    struct _IO_marker *_markers;
+    struct _IO_FILE *_chain;
+    int _fileno;
+    int _flags2 : 24;
+    char _short_backupbuf[1];
+    __off_t _old_offset;
+    unsigned short _cur_column;
+    signed char _vtable_offset;
+    char _shortbuf[1];
+    _IO_lock_t *_lock;
+    __off64_t _offset;
+    struct _IO_codecvt *_codecvt;
+    struct _IO_wide_data *_wide_data;
+    struct _IO_FILE *_freeres_list;
+    void *_freeres_buf;
+    struct _IO_FILE **_prevchain;
+    int _mode;
+    int _unused3;
+    __uint64_t _total_written;
+    char _unused2[8];
+}
+pwndbg> ptype struct _IO_FILE_plus
+type = struct _IO_FILE_plus {
+    FILE file;
+    const struct _IO_jump_t *vtable;
+}
+```
 
 In practical terms, `_IO_FILE_plus` is an `_IO_FILE` with a vtable pointer. That immediately looks interesting: if we can control this pointer, we may be able to redirect an indirect call and hijack control flow.
 
@@ -37,7 +78,46 @@ In practical terms, `_IO_FILE_plus` is an `_IO_FILE` with a vtable pointer. That
 
 To inspect the vtable, let's examine a `FILE` pointer returned by `fopen`.
 
-![2](./images/2.png)
+```c
+pwndbg> p *(struct _IO_FILE_plus *)0x37ecf010
+$4 = {
+  file = {
+    _flags = 0xfbad2480,
+    _IO_read_ptr = 0x0,
+    _IO_read_end = 0x0,
+    _IO_read_base = 0x0,
+    _IO_write_base = 0x0,
+    _IO_write_ptr = 0x0,
+    _IO_write_end = 0x0,
+    _IO_buf_base = 0x0,
+    _IO_buf_end = 0x0,
+    _IO_save_base = 0x0,
+    _IO_backup_base = 0x0,
+    _IO_save_end = 0x0,
+    _markers = 0x0,
+    _chain = 0x7f58a7f4b4a0 <_IO_2_1_stderr_>,
+    _fileno = 0x3,
+    _flags2 = 0x0,
+    _short_backupbuf = "",
+    _old_offset = 0x0,
+    _cur_column = 0x0,
+    _vtable_offset = 0x0,
+    _shortbuf = "",
+    _lock = 0x37ecf0f0,
+    _offset = 0xffffffffffffffff,
+    _codecvt = 0x0,
+    _wide_data = 0x37ecf100,
+    _freeres_list = 0x0,
+    _freeres_buf = 0x0,
+    _prevchain = 0x7f58a7f4b480 <_IO_list_all>,
+    _mode = 0x0,
+    _unused3 = 0x0,
+    _total_written = 0x0,
+    _unused2 = "\000\000\000\000\000\000\000"
+  },
+  vtable = 0x7f58a7f49030 <_IO_file_jumps>
+}
+```
 
 The pointer targets the `_IO_file_jumps` table.
 
