@@ -1,5 +1,7 @@
 # House of Apple 2
 
+> **Note:** This article is a work in progress. Some sections still require technical corrections and further refinement.
+
 **File Stream Oriented Programming (FSOP).** This is about abusing glibc file stream structures to hijack control flow. One way to do this is by corrupting the vtable dispatch mechanism of `_IO_FILE_plus`. Modern glibc validates this vtable, so the obvious approach of replacing it with an arbitrary address don't work.
 
 **House of Apple 2** works around this restriction by using a valid `_IO_FILE_plus` vtable to reach the wide-character stream machinery, where a secondary vtable is directly dispatched without range validation. This provides an `arbitrary call` primitive that we can escalate into a stack pivot and a ROP chain.
@@ -73,6 +75,8 @@ type = struct _IO_FILE_plus {
 
 In practical terms, `_IO_FILE_plus` is an `_IO_FILE` with a vtable pointer. That immediately looks interesting: if we can control this pointer, we may be able to redirect an indirect call and hijack control flow.
 
+### Inspecting the file stream vtable
+
 To inspect the vtable, let's examine a `FILE` pointer returned by `fopen`.
 
 ```c
@@ -108,6 +112,8 @@ pwndbg> tele &_IO_file_jumps 21
 ```
 
 This is a set of 21 function pointers. File stream operations dispatch through different entries depending on the execution path.
+
+### Following the `fwrite` path
 
 For this exploration I'll focus on the `fwrite` path. After placing breakpoints on each function and calling `fwrite`, the first breakpoint we hit is `_IO_file_xsputn`.
 
@@ -151,6 +157,8 @@ The call happens at `fwrite+216`. This matches the [glibc source](https://elixir
    0x00007f91cbe7d634 <+212>:   mov    QWORD PTR [rbp-0x28],rcx
    0x00007f91cbe7d638 <+216>:   call   QWORD PTR [rax+0x38]
 ```
+
+### Attempting to replace the vtable
 
 For a first attempt, let's overwrite the vtable pointer with `desired_func - 0x38` and set a breakpoint at `fwrite+216`.
 
@@ -232,6 +240,8 @@ Dump of assembler code for function _IO_vtable_check:
 ```
 
 The implementation contains a mechanism for accepting foreign vtables, but it is not under our control. The relevant code is available in [`vtables.c`](https://elixir.bootlin.com/glibc/glibc-2.43/source/libio/vtables.c#L504).
+
+### Understanding the vtable validation
 
 By the time `_IO_vtable_check` is called, we're already doomed. The earlier `IO_validate_vtable` frame in the backtrace is the interesting part, so let's inspect that instead.
 
