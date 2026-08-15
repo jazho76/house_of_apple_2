@@ -73,10 +73,6 @@ class HouseOfApple2:
         if arg is None:
             return overlapped_struct
 
-        flags_low = int.from_bytes(arg[:4].ljust(4, b"\0"), "little")
-        if flags_low & 0x8:
-            raise ValueError("arg clobbers flags _IO_NO_WRITES(0x8).")
-
         if len(arg) > 0x88:
             raise ValueError("arg too long, would clobber the _lock")
 

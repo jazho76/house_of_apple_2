@@ -340,7 +340,7 @@ type = struct _IO_wide_data {
 
 It is very similar to a FILE structure. This structure is part of the machinery to work with `wchar_t` strings.
 
-We need to make our FILE structure use this. There is a known path through (\_IO_wfile_overflow)[https://elixir.bootlin.com/glibc/glibc-2.43/source/libio/wfileops.c#L407], that will call (\_IO_wdoallocbuf)[https://elixir.bootlin.com/glibc/glibc-2.43/source/libio/wgenops.c#L364]
+We need to make our FILE structure use this. There is a known path through [\_IO_wfile_overflow](https://elixir.bootlin.com/glibc/glibc-2.43/source/libio/wfileops.c#L407), that will call [\_IO_wdoallocbuf](https://elixir.bootlin.com/glibc/glibc-2.43/source/libio/wgenops.c#L364).
 
 ```c
 wint_t
@@ -570,6 +570,10 @@ While we are here, just before the last indirect call, notice the state of the r
 ```
 
 RDI, RDX are pointing to the first byte of the FILE struct. So, rdi = pointer to memory we control. If the target function dereferences this pointer, we can place the pointed data at offset 0x0 of the file struct and control the first and third argument.
+
+## Synthetizing
+
+This primitive is synthetized in `./exp/house_of_apple2.py`
 
 ## Stack pivoting
 
