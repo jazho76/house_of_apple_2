@@ -420,6 +420,13 @@ The ROP layout in `ace.py` is:
 
 We have now achieved arbitrary code execution.
 
+## Further reading
+
+- [House of Apple: a new glibc IO attack method (2)](https://www.roderickchan.cn/zh-cn/house-of-apple-%E4%B8%80%E7%A7%8D%E6%96%B0%E7%9A%84glibc%E4%B8%ADio%E6%94%BB%E5%87%BB%E6%96%B9%E6%B3%95-2/), the original House of Apple 2 publication by Roderick.
+- [`fsop-finder`](https://github.com/xf1les/fsop-finder), which independently identified the `_IO_wdoallocbuf` path while exploring modern FSOP paths.
+- [Angry-FSROP](https://blog.kylebot.net/2022/10/22/angry-FSROP/), for a tool-assisted approach to finding control-flow paths.
+- [Deep Dive into FSOP](https://niftic.ca/posts/fsop/), for broader coverage of FILE internals, known techniques and other interesting paths.
+
 ## Conclusion
 
 The interesting part of House of Apple 2 is not only the arbitrary-call primitive, but also how several legitimate pieces of glibc fit together: a validated vtable, the wide-character stream machinery, an unvalidated secondary vtable and a controlled `FILE` structure. Together they allow us to move from an arbitrary call to a stack pivot and finally to arbitrary code execution through ROP.
