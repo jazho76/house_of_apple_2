@@ -582,7 +582,39 @@ Both `RDI` and `RDX` point to the beginning of the controlled `FILE` structure. 
 
 ## Constructing the primitive
 
-The primitive is implemented in [`./exp/house_of_apple2.py`](./exp/house_of_apple2.py). A complete `_IO_FILE_plus`, a complete `_IO_wide_data` and a separate fake vtable would require a rather large buffer. This implementation overlaps both structures and the fake `_wide_vtable` to reduce the required space.
+The primitive is implemented in [`./exp/house_of_apple2.py`](./exp/house_of_apple2.py). The straightforward approach would be to place a complete `_IO_FILE_plus`, a complete `_IO_wide_data` and a separate fake wide vtable one after another. That would work, but it would also require a rather large buffer.
+
+We can make the payload smaller by overlapping them.
+
+The fake `_IO_wide_data` starts at offset `0x08`, inside the fake `_IO_FILE_plus`. This works because most fields involved in the overlap can remain zero. Conveniently, `_wide_data->_IO_write_base` and `_wide_data->_IO_buf_base` overlap with `_IO_write_base` and `_IO_buf_base` in the `FILE` structure, and both pairs need to be `NULL`.
+
+The important parts of the layout are:
+
+| Payload offset | `_IO_FILE_plus` interpretation | `_IO_wide_data` interpretation    | Value                                            |
+| -------------: | ------------------------------ | --------------------------------- | ------------------------------------------------ |
+|         `0x00` | `_flags`                       | -                                 | Must not set `_IO_NO_WRITES` or `_IO_UNBUFFERED` |
+|         `0x08` | `_IO_read_ptr`                 | Start of fake `_IO_wide_data`     | Zero                                             |
+|         `0x20` | `_IO_write_base`               | `_IO_write_base`                  | `NULL`                                           |
+|         `0x38` | `_IO_buf_base`                 | `_IO_buf_base`                    | `NULL`                                           |
+|         `0x78` | `_old_offset`                  | Part of the fake wide vtable      | Base of the fake wide vtable                     |
+|         `0x88` | `_lock`                        | -                                 | Pointer to a zero value in writable memory       |
+|         `0xa0` | `_wide_data`                   | -                                 | `base + 0x08`                                    |
+|         `0xd8` | `_IO_FILE_plus` vtable         | -                                 | Position that dispatches to `_IO_wfile_overflow` |
+|         `0xe0` | -                              | Fake wide vtable entry at `+0x68` | Address of the arbitrary function                |
+|         `0xe8` | -                              | `_wide_vtable`                    | `base + 0x78`                                    |
+
+The last two entries are the key to the arbitrary call. `_wide_vtable` points back into the payload at offset `0x78`. When `_IO_wdoallocbuf` dispatches through `_wide_vtable + 0x68`, it reads the function pointer stored at offset `0xe0`:
+
+```text
+wide_vtable       = base + 0x78
+wide_vtable+0x68  = base + 0xe0
+```
+
+This is where we place the address of the function we want to call.
+
+The outer vtable depends on the operation used to trigger the primitive. For `fwrite`, the dispatch happens through the slot at `+0x38`, so the pointer is adjusted until that slot resolves to `_IO_wfile_overflow`. The implementation also supports `fread` and `fclose` by applying the corresponding dispatch offsets.
+
+With this layout, a single compact buffer contains the fake `FILE` structure, the overlapping `_IO_wide_data`, the fake wide vtable and the final function pointer.
 
 ## Stack pivoting
 
