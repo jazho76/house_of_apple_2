@@ -332,6 +332,8 @@ We now understand the basic mechanism and its main constraint: the `_IO_FILE_plu
 
 House of Apple 2 gets around this by reaching a second vtable through the wide-character stream machinery. This second vtable is not validated in the same way. Let's follow that path in GDB and see how the pieces connect.
 
+### The wide-character stream machinery
+
 Back in `_IO_FILE`, there is a `_wide_data` field pointing to an `_IO_wide_data` structure. This structure has a vtable of its own.
 
 ```c
@@ -429,6 +431,8 @@ pwndbg> x/15i _IO_wdoallocbuf
 ```
 
 Here is the interesting part. At `_IO_wdoallocbuf+44` glibc loads the `_wide_vtable` pointer from `_wide_data`. At `_IO_wdoallocbuf+55` it calls the function pointer at `_wide_vtable + 0x68`. This time there is no range validation.
+
+### Connecting the two vtables
 
 Now the pieces start to connect. `_IO_wfile_overflow` belongs to `_IO_wfile_jumps` which exists inside the valid range accepted by the first vtable check. From there, execution can reach another indirect call through the unvalidated `_wide_vtable`.
 
@@ -632,7 +636,7 @@ With this layout, a single compact buffer contains the fake `FILE` structure, th
 
 ## Stack pivoting
 
-At this point we have achieved arbitrary call, but our control is still limited to a single call. The next step is to pivot the stack into controlled memory and start a ROP chain.
+At this point we have an arbitrary-call primitive but our control over the registers is limited. The next step is to pivot the stack into controlled memory and start a ROP chain.
 
 ```asm
 pwndbg> disass __push___start_context
@@ -716,8 +720,8 @@ uid=1000(user) gid=1000(user) groups=1000(user)
 $
 ```
 
-Now we achieved arbitrary code execution.
+We have now achieved arbitrary code execution.
 
 ## Conclusion
 
-The interesting part of House of Apple 2 is not only the arbitrary-call primitive, but also how several legitimate pieces of glibc fit together: a validated vtable, the wide-character stream machinery, an unvalidated secondary vtable and a controlled FILE structure. Together they allow us to move from an arbitrary call to a stack pivot and finally, to arbitrary code execution through ROP.
+The interesting part of House of Apple 2 is not only the arbitrary-call primitive, but also how several legitimate pieces of glibc fit together: a validated vtable, the wide-character stream machinery, an unvalidated secondary vtable and a controlled `FILE` structure. Together they allow us to move from an arbitrary call to a stack pivot and finally to arbitrary code execution through ROP.
