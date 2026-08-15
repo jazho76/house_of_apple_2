@@ -161,42 +161,7 @@ Oops, execution aborts before reaching the breakpoint. The error suggests that g
 
 `fwrite` reaches `_IO_vtable_check` which is rejecting the forged vtable pointer.
 
-```asm
-pwndbg> disass _IO_vtable_check
-Dump of assembler code for function _IO_vtable_check:
-   0x00007f641fca8840 <+0>:     endbr64
-   0x00007f641fca8844 <+4>:     push   rbp
-   0x00007f641fca8845 <+5>:     lea    rdi,[rip+0xfffffffffffffff4]        # 0x7f641fca8840 <_IO_vtable_check>
-   0x00007f641fca884c <+12>:    mov    rbp,rsp
-   0x00007f641fca884f <+15>:    sub    rsp,0x40
-   0x00007f641fca8853 <+19>:    mov    rax,QWORD PTR fs:0x28
-   0x00007f641fca885c <+28>:    mov    QWORD PTR [rbp-0x8],rax
-   0x00007f641fca8860 <+32>:    mov    rax,QWORD PTR [rip+0x17bea1]        # 0x7f641fe24708 <IO_accept_foreign_vtables>
-   0x00007f641fca8867 <+39>:    ror    rax,0x11
-   0x00007f641fca886b <+43>:    xor    rax,QWORD PTR fs:0x30
-   0x00007f641fca8874 <+52>:    cmp    rax,rdi
-   0x00007f641fca8877 <+55>:    je     0x7f641fca88a8 <_IO_vtable_check+104>
-   0x00007f641fca8879 <+57>:    mov    rax,QWORD PTR [rip+0x179638]        # 0x7f641fe21eb8
-   0x00007f641fca8880 <+64>:    cmp    QWORD PTR [rax+0x2c8],0x0
-   0x00007f641fca8888 <+72>:    je     0x7f641fca88a8 <_IO_vtable_check+104>
-   0x00007f641fca888a <+74>:    xor    ecx,ecx
-   0x00007f641fca888c <+76>:    lea    rdx,[rbp-0x38]
-   0x00007f641fca8890 <+80>:    lea    rsi,[rbp-0x30]
-   0x00007f641fca8894 <+84>:    call   0x7f641fda2de0 <_dl_addr>
-   0x00007f641fca8899 <+89>:    test   eax,eax
-   0x00007f641fca889b <+91>:    je     0x7f641fca88b9 <_IO_vtable_check+121>
-   0x00007f641fca889d <+93>:    mov    rax,QWORD PTR [rbp-0x38]
-   0x00007f641fca88a1 <+97>:    cmp    QWORD PTR [rax+0x30],0x0
-   0x00007f641fca88a6 <+102>:   je     0x7f641fca88b9 <_IO_vtable_check+121>
-   0x00007f641fca88a8 <+104>:   mov    rax,QWORD PTR [rbp-0x8]
-   0x00007f641fca88ac <+108>:   sub    rax,QWORD PTR fs:0x28
-   0x00007f641fca88b5 <+117>:   jne    0x7f641fca88c5 <_IO_vtable_check+133>
-   0x00007f641fca88b7 <+119>:   leave
-   0x00007f641fca88b8 <+120>:   ret
-   0x00007f641fca88b9 <+121>:   lea    rdi,[rip+0x1482d8]        # 0x7f641fdf0b98
-   0x00007f641fca88c0 <+128>:   call   0x7f641fca7fe0 <__GI___libc_fatal>
-   0x00007f641fca88c5 <+133>:   call   0x7f641fd553a0 <__stack_chk_fail>
-```
+![6](./images/6.png)
 
 The implementation contains a mechanism for accepting foreign vtables, but it is not under our control. The relevant code is available in [`vtables.c`](https://elixir.bootlin.com/glibc/glibc-2.43/source/libio/vtables.c#L504).
 
@@ -212,74 +177,22 @@ pwndbg> disass IO_validate_vtable
 GDB cannot resolve `IO_validate_vtable` as a symbol. Looking at the [source](https://elixir.bootlin.com/glibc/glibc-2.43/source/libio/libioP.h#L1033), we can see it is inlined into `fwrite`.
 
 ```asm
-   0x00007f641fc9d5f6 <+150>:   lea    rdi,[rip+0x1838e3]        # 0x7f641fe20ee0 <__io_vtables>
-   0x00007f641fc9d5fd <+157>:   mov    rax,QWORD PTR [rbx+0xd8]
-   0x00007f641fc9d604 <+164>:   mov    r14,QWORD PTR [rbx+0xc8]
-   0x00007f641fc9d60b <+171>:   mov    r15,QWORD PTR [rbx+0x28]
-   0x00007f641fc9d60f <+175>:   mov    r12,QWORD PTR [rbx+0x20]
-   0x00007f641fc9d613 <+179>:   mov    rdx,rax
-   0x00007f641fc9d616 <+182>:   sub    rdx,rdi
-   0x00007f641fc9d619 <+185>:   cmp    rdx,0x92f
-   0x00007f641fc9d620 <+192>:   ja     0x7f641fc9d780 <__GI__IO_fwrite+544>
+   0x00007fd5181d35f6 <+150>:	lea    rdi,[rip+0x1838e3]        # 0x7fd518356ee0 <__io_vtables>
+   0x00007fd5181d35fd <+157>:	mov    rax,QWORD PTR [rbx+0xd8]
+   0x00007fd5181d3604 <+164>:	mov    r14,QWORD PTR [rbx+0xc8]
+   0x00007fd5181d360b <+171>:	mov    r15,QWORD PTR [rbx+0x28]
+   0x00007fd5181d360f <+175>:	mov    r12,QWORD PTR [rbx+0x20]
+   0x00007fd5181d3613 <+179>:	mov    rdx,rax
+   0x00007fd5181d3616 <+182>:	sub    rdx,rdi
+   0x00007fd5181d3619 <+185>:	cmp    rdx,0x92f
+   0x00007fd5181d3620 <+192>:	ja     0x7fd5181d3780 <__GI__IO_fwrite+544>
 ```
 
 A vtable pointer is accepted only when it falls within `[__io_vtables, __io_vtables + IO_VTABLES_LEN)`. So we cannot simply point it anywhere we want. Still, this is a fairly large region containing several jump tables, which gives us something to explore.
 
 The valid range begins as follows:
 
-```
-pwndbg> tele &__io_vtables 0x92f/8
-00:0000│     0x7f641fe20ee0 (__io_vtables) ◂— 0
-01:0008│     0x7f641fe20ee8 (__io_vtables+8) ◂— 0
-02:0010│     0x7f641fe20ef0 (__io_vtables+16) —▸ 0x7f641fcaf860 (_IO_str_finish) ◂— endbr64
-03:0018│     0x7f641fe20ef8 (__io_vtables+24) —▸ 0x7f641fcaf300 (_IO_str_overflow) ◂— endbr64
-04:0020│     0x7f641fe20f00 (__io_vtables+32) —▸ 0x7f641fcaf4d0 (_IO_str_underflow) ◂— endbr64
-05:0028│     0x7f641fe20f08 (__io_vtables+40) —▸ 0x7f641fcad2c0 (_IO_default_uflow) ◂— endbr64
-06:0030│     0x7f641fe20f10 (__io_vtables+48) —▸ 0x7f641fcaf840 (_IO_str_pbackfail) ◂— endbr64
-07:0038│     0x7f641fe20f18 (__io_vtables+56) —▸ 0x7f641fcad320 (_IO_default_xsputn) ◂— endbr64
-08:0040│     0x7f641fe20f20 (__io_vtables+64) —▸ 0x7f641fcad570 (_IO_default_xsgetn) ◂— endbr64
-09:0048│     0x7f641fe20f28 (__io_vtables+72) —▸ 0x7f641fcaf550 (_IO_str_seekoff) ◂— endbr64
-0a:0050│     0x7f641fe20f30 (__io_vtables+80) —▸ 0x7f641fcad9e0 (_IO_default_seekpos) ◂— endbr64
-0b:0058│     0x7f641fe20f38 (__io_vtables+88) —▸ 0x7f641fcad8f0 (_IO_default_setbuf) ◂— endbr64
-0c:0060│     0x7f641fe20f40 (__io_vtables+96) —▸ 0x7f641fcadc80 (_IO_default_sync) ◂— endbr64
-0d:0068│     0x7f641fe20f48 (__io_vtables+104) —▸ 0x7f641fcada50 (_IO_default_doallocate) ◂— endbr64
-0e:0070│     0x7f641fe20f50 (__io_vtables+112) —▸ 0x7f641fcaeed0 (_IO_default_read) ◂— endbr64
-0f:0078│     0x7f641fe20f58 (__io_vtables+120) —▸ 0x7f641fcaeee0 (_IO_default_write) ◂— endbr64
-10:0080│     0x7f641fe20f60 (__io_vtables+128) —▸ 0x7f641fcaeeb0 (_IO_default_seek) ◂— endbr64
-11:0088│     0x7f641fe20f68 (__io_vtables+136) —▸ 0x7f641fcadc80 (_IO_default_sync) ◂— endbr64
-12:0090│     0x7f641fe20f70 (__io_vtables+144) —▸ 0x7f641fcaeec0 (_IO_default_stat) ◂— endbr64
-13:0098│     0x7f641fe20f78 (__io_vtables+152) —▸ 0x7f641fcaeef0 (_IO_default_showmanyc) ◂— endbr64
-14:00a0│     0x7f641fe20f80 (__io_vtables+160) —▸ 0x7f641fcaef00 (_IO_default_imbue) ◂— endbr64
-15:00a8│     0x7f641fe20f88 (__io_vtables+168) ◂— 0
-16:00b0│     0x7f641fe20f90 (__io_vtables+176) ◂— 0
-17:00b8│     0x7f641fe20f98 (__io_vtables+184) —▸ 0x7f641fca35b0 (_IO_wstr_finish) ◂— endbr64
-18:00c0│     0x7f641fe20fa0 (__io_vtables+192) —▸ 0x7f641fca2f60 (_IO_wstr_overflow) ◂— endbr64
-19:00c8│     0x7f641fe20fa8 (__io_vtables+200) —▸ 0x7f641fca31b0 (_IO_wstr_underflow) ◂— endbr64
-1a:00d0│     0x7f641fe20fb0 (__io_vtables+208) —▸ 0x7f641fca1cb0 (_IO_wdefault_uflow) ◂— endbr64
-1b:00d8│     0x7f641fe20fb8 (__io_vtables+216) —▸ 0x7f641fca3590 (_IO_wstr_pbackfail) ◂— endbr64
-1c:00e0│     0x7f641fe20fc0 (__io_vtables+224) —▸ 0x7f641fca1dc0 (_IO_wdefault_xsputn) ◂— endbr64
-1d:00e8│     0x7f641fe20fc8 (__io_vtables+232) —▸ 0x7f641fca2560 (_IO_wdefault_xsgetn) ◂— endbr64
-1e:00f0│     0x7f641fe20fd0 (__io_vtables+240) —▸ 0x7f641fca3240 (_IO_wstr_seekoff) ◂— endbr64
-1f:00f8│     0x7f641fe20fd8 (__io_vtables+248) —▸ 0x7f641fcad9e0 (_IO_default_seekpos) ◂— endbr64
-20:0100│     0x7f641fe20fe0 (__io_vtables+256) —▸ 0x7f641fcad8f0 (_IO_default_setbuf) ◂— endbr64
-21:0108│     0x7f641fe20fe8 (__io_vtables+264) —▸ 0x7f641fcadc80 (_IO_default_sync) ◂— endbr64
-22:0110│     0x7f641fe20ff0 (__io_vtables+272) —▸ 0x7f641fca20f0 (_IO_wdefault_doallocate) ◂— endbr64
-23:0118│     0x7f641fe20ff8 (__io_vtables+280) —▸ 0x7f641fcaeed0 (_IO_default_read) ◂— endbr64
-24:0120│     0x7f641fe21000 (__io_vtables+288) —▸ 0x7f641fcaeee0 (_IO_default_write) ◂— endbr64
-25:0128│     0x7f641fe21008 (__io_vtables+296) —▸ 0x7f641fcaeeb0 (_IO_default_seek) ◂— endbr64
-26:0130│     0x7f641fe21010 (__io_vtables+304) —▸ 0x7f641fcadc80 (_IO_default_sync) ◂— endbr64
-27:0138│     0x7f641fe21018 (__io_vtables+312) —▸ 0x7f641fcaeec0 (_IO_default_stat) ◂— endbr64
-28:0140│     0x7f641fe21020 (__io_vtables+320) —▸ 0x7f641fcaeef0 (_IO_default_showmanyc) ◂— endbr64
-29:0148│     0x7f641fe21028 (__io_vtables+328) —▸ 0x7f641fcaef00 (_IO_default_imbue) ◂— endbr64
-2a:0150│     0x7f641fe21030 (_IO_file_jumps) ◂— 0
-2b:0158│     0x7f641fe21038 (_IO_file_jumps+8) ◂— 0
-2c:0160│     0x7f641fe21040 (_IO_file_jumps+16) —▸ 0x7f641fca9120 (_IO_file_finish) ◂— endbr64
-2d:0168│     0x7f641fe21048 (_IO_file_jumps+24) —▸ 0x7f641fcaa730 (_IO_file_overflow) ◂— endbr64
-2e:0170│     0x7f641fe21050 (_IO_file_jumps+32) —▸ 0x7f641fca9f30 (_IO_file_underflow) ◂— endbr64
-2f:0178│     0x7f641fe21058 (_IO_file_jumps+40) —▸ 0x7f641fcad2c0 (_IO_default_uflow) ◂— endbr64
-30:0180│     0x7f641fe21060 (_IO_file_jumps+48) —▸ 0x7f641fcaed00 (_IO_default_pbackfail) ◂— endbr64
-...
-```
+![7](./images/7.png)
 
 ## House of Apple 2
 
