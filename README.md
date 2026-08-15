@@ -129,45 +129,16 @@ This is a set of 21 function pointers. File stream operations dispatch through d
 
 For this exploration I'll focus on the `fwrite` path. After placing breakpoints on each function and calling `fwrite`, the first breakpoint we hit is `_IO_file_xsputn`.
 
-```c
-b► 0x7f91cbe8b400 <_IO_file_xsputn>       endbr64
-   0x7f91cbe8b404 <_IO_file_xsputn+4>     push   rbp
-   0x7f91cbe8b405 <_IO_file_xsputn+5>     mov    rbp, rsp      RBP => 0x7ffdc1b9bcd0 —▸ 0x7ffdc1b9bd30 —▸ 0x7ffdc1b9bd70 —▸ 0x7ffdc1b9bdf0 ◂— ...
-   0x7f91cbe8b408 <_IO_file_xsputn+8>     push   r13
-   0x7f91cbe8b40a <_IO_file_xsputn+10>    push   r12
-   0x7f91cbe8b40c <_IO_file_xsputn+12>    mov    r12, rdx      R12 => 1
-   0x7f91cbe8b40f <_IO_file_xsputn+15>    xor    edx, edx      EDX => 0
-   0x7f91cbe8b411 <_IO_file_xsputn+17>    push   rbx
-   0x7f91cbe8b412 <_IO_file_xsputn+18>    sub    rsp, 0x28     RSP => 0x7ffdc1b9bc90 (0x7ffdc1b9bcb8 - 0x28)
-   0x7f91cbe8b416 <_IO_file_xsputn+22>    test   r12, r12      1 & 1     EFLAGS => 0x202 [ cf pf af zf sf IF df of iopl:00 ac ]
-   0x7f91cbe8b419 <_IO_file_xsputn+25>  ✘ je     _IO_file_xsputn+113         <_IO_file_xsputn+113>
-──────────────────────────────────────────────────────────────────────────[ STACK ]──────────────────────────────────────────────────────────────────────────
-00:0000│ rsp 0x7ffdc1b9bcd8 —▸ 0x7f91cbe7d63b (fwrite+219) ◂— mov edx, dword ptr [rbx]
-01:0008│-050 0x7ffdc1b9bce0 —▸ 0x7ffdc1b9bd00 ◂— 1
-02:0010│-048 0x7ffdc1b9bce8 —▸ 0x7f91cbf1832e (read+30) ◂— leave
-03:0018│-040 0x7ffdc1b9bcf0 ◂— 0
-04:0020│-038 0x7ffdc1b9bcf8 ◂— 1
-... ↓        2 skipped
-07:0038│-020 0x7ffdc1b9bd10 ◂— 0
-────────────────────────────────────────────────────────────────────────[ BACKTRACE ]────────────────────────────────────────────────────────────────────────
- ► 0 0x7f91cbe8b400 _IO_file_xsputn
-   1 0x7f91cbe7d63b fwrite+219
-   2 0x401863       op_fwrite+151
-   3 0x401b57       main+347
-   4 0x7f91cbe1a601 __libc_start_call_main+129
-   5 0x7f91cbe1a718 __libc_start_main+136
-   6 0x401185       _start+37
-
-```
+![4](./images/4.png)
 
 The call happens at `fwrite+216`. This matches the [glibc source](https://elixir.bootlin.com/glibc/glibc-2.43/source/libio/iofwrite.c#L44): `_IO_sputn` is a macro that dispatches through the vtable, resolving to `_IO_file_xsputn` for this stream.
 
 ```asm
-   0x00007f91cbe7d62a <+202>:   mov    rdx,rcx
-   0x00007f91cbe7d62d <+205>:   mov    rdi,rbx
-   0x00007f91cbe7d630 <+208>:   mov    QWORD PTR [rbp-0x30],r8
-   0x00007f91cbe7d634 <+212>:   mov    QWORD PTR [rbp-0x28],rcx
-   0x00007f91cbe7d638 <+216>:   call   QWORD PTR [rax+0x38]
+   0x00007fd5181d362a <+202>:	mov    rdx,rcx
+   0x00007fd5181d362d <+205>:	mov    rdi,rbx
+   0x00007fd5181d3630 <+208>:	mov    QWORD PTR [rbp-0x30],r8
+   0x00007fd5181d3634 <+212>:	mov    QWORD PTR [rbp-0x28],rcx
+   0x00007fd5181d3638 <+216>:	call   QWORD PTR [rax+0x38]
 ```
 
 ### Attempting to replace the vtable
@@ -179,38 +150,14 @@ pwndbg> p &win
 $3 = (<text variable, no debug info> *) 0x4019e1 <win>
 pwndbg> p/x &win - 0x38
 $4 = 0x4019a9
-pwndbg> set ((struct _IO_FILE_plus *)0x38588010)->vtable = (void *)0x4019a9
+pwndbg> set ((struct _IO_FILE_plus *)0x5334010)->vtable = (void *)0x4019a9
 pwndbg> b *fwrite+216
-Breakpoint 4 at 0x7f641fc9d638: file ./libio/libioP.h, line 1042.
+Breakpoint 4 at 0x7fd5181d3638: file ./libio/libioP.h, line 1042.
 ```
 
-```
-gdb: Program received signal SIGABRT
-Output: Fatal error: glibc detected an invalid stdio handle
-```
+![5](./images/5.png)
 
 Oops, execution aborts before reaching the breakpoint. The error suggests that glibc validates the vtable pointer before performing the indirect call. Let's inspect the backtrace and see where this happens.
-
-```c
-pwndbg> backtrace
-#0  __pthread_kill_implementation (threadid=<optimized out>, signo=0x6, no_tid=0x0) at ./nptl/pthread_kill.c:44
-#1  __pthread_kill_internal (threadid=<optimized out>, signo=0x6) at ./nptl/pthread_kill.c:89
-#2  __GI___pthread_kill (threadid=<optimized out>, signo=signo@entry=0x6) at ./nptl/pthread_kill.c:100
-#3  0x00007f641fc55b7e in __GI_raise (sig=sig@entry=0x6) at ../sysdeps/posix/raise.c:26
-#4  0x00007f641fc388ec in __GI_abort () at ./stdlib/abort.c:77
-#5  0x00007f641fc39979 in __libc_message_impl (vma_name=vma_name@entry=0x7f641fdeb569 "glibc: fatal", fmt=fmt@entry=0x7f641fdee8c6 "%s") at ../sysdeps/posix/libc_fatal.c:138
-#6  0x00007f641fca8000 in __libc_message_wrapper (vmaname=0x7f641fdeb569 "glibc: fatal", fmt=0x7f641fdee8c6 "%s") at ../include/stdio.h:203
-#7  __GI___libc_fatal (message=message@entry=0x7f641fdf0b98 "Fatal error: glibc detected an invalid stdio handle\n") at ../sysdeps/posix/libc_fatal.c:147
-#8  0x00007f641fca88c5 in _IO_vtable_check () at ./libio/vtables.c:534
-#9  _IO_vtable_check () at ./libio/vtables.c:504
-#10 0x00007f641fc9d799 in IO_validate_vtable (vtable=0x4019a9 <op_inspect+9>) at ./libio/libioP.h:1041
-#11 __GI__IO_fwrite (buf=<optimized out>, size=<optimized out>, count=<optimized out>, fp=0x38588010) at ./libio/iofwrite.c:44
-#12 0x0000000000401863 in op_fwrite ()
-#13 0x0000000000401b57 in main ()
-#14 0x00007f641fc3a601 in __libc_start_call_main (main=main@entry=0x4019fc <main>, argc=argc@entry=0x1, argv=argv@entry=0x7ffe0fa24b08) at ../sysdeps/nptl/libc_start_call_main.h:59
-#15 0x00007f641fc3a718 in __libc_start_main_impl (main=0x4019fc <main>, argc=0x1, argv=0x7ffe0fa24b08, init=<optimized out>, fini=<optimized out>, rtld_fini=<optimized out>, stack_end=0x7ffe0fa24af8) at ../csu/libc-start.c:360
-#16 0x0000000000401185 in _start ()
-```
 
 `fwrite` reaches `_IO_vtable_check` which is rejecting the forged vtable pointer.
 
