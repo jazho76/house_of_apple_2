@@ -329,6 +329,8 @@ Finally, the checks in `_IO_wdoallocbuf` pass, and the indirect call at `_IO_wdo
 
 While we're here, it is worth looking at the register state immediately before the final indirect call.
 
+![13](./images/13.png)
+
 Both `RDI` and `RDX` point to the beginning of the controlled `FILE` structure. We do not directly control the first and third argument registers, but we control the memory they point to. Cool!
 
 ## Constructing the primitive
