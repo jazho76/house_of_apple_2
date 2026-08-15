@@ -2,7 +2,7 @@
 
 > **Note:** This article is a work in progress. Some sections still require technical corrections and further refinement.
 
-**File Stream Oriented Programming (FSOP).** This is about abusing glibc file stream structures to hijack control flow. One way to do this is by corrupting the vtable dispatch mechanism of `_IO_FILE_plus`. Modern glibc validates this vtable, so the obvious approach of replacing it with an arbitrary address don't work.
+**File Stream Oriented Programming (FSOP).** This is about abusing glibc file stream structures to hijack control flow. One way to do this is by corrupting the vtable dispatch mechanism of `_IO_FILE_plus`. Modern glibc validates this vtable, so the obvious approach of replacing it with an arbitrary address doesn't work.
 
 **House of Apple 2** works around this restriction by using a valid `_IO_FILE_plus` vtable to reach the wide-character stream machinery, where a secondary vtable is directly dispatched without range validation. This provides an `arbitrary call` primitive that we can escalate into a stack pivot and a ROP chain.
 
@@ -10,7 +10,7 @@ This repository is a self-contained playground I built after completing the [pwn
 
 ## Exploitation prerequisites
 
-This exploration assumes that we can overwrite a `FILE` structure and that we have both, a heap leak and a libc leak. The target binary already provides this.
+This exploration assumes that we can overwrite a `FILE` structure and that we have both a heap leak and a libc leak. The target binary already provides this.
 
 ## Sandbox environment
 
