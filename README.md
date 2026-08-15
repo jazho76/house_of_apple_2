@@ -155,9 +155,9 @@ pwndbg> b *fwrite+216
 Breakpoint 4 at 0x7fd5181d3638: file ./libio/libioP.h, line 1042.
 ```
 
-![5](./images/5.png)
-
 Oops, execution aborts before reaching the breakpoint. The error suggests that glibc validates the vtable pointer before performing the indirect call. Let's inspect the backtrace and see where this happens.
+
+![5](./images/5.png)
 
 `fwrite` reaches `_IO_vtable_check` which is rejecting the forged vtable pointer.
 
