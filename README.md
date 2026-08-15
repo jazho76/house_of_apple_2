@@ -614,7 +614,7 @@ The important parts of the layout are:
 |         `0x08` | `_IO_read_ptr`                 | Start of fake `_IO_wide_data`     | Zero                                             |
 |         `0x20` | `_IO_write_base`               | `_IO_write_base`                  | `NULL`                                           |
 |         `0x38` | `_IO_buf_base`                 | `_IO_buf_base`                    | `NULL`                                           |
-|         `0x78` | `_old_offset`                  | Part of the fake wide vtable      | Base of the fake wide vtable                     |
+|         `0x78` | `_old_offset`                  | Start of the fake wide vtable     | Overlapped vtable data                           |
 |         `0x88` | `_lock`                        | -                                 | Pointer to a zero value in writable memory       |
 |         `0xa0` | `_wide_data`                   | -                                 | `base + 0x08`                                    |
 |         `0xd8` | `_IO_FILE_plus` vtable         | -                                 | Position that dispatches to `_IO_wfile_overflow` |
