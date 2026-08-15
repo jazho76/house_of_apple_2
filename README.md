@@ -1,8 +1,10 @@
 # House of Apple 2
 
-File Stream Oriented Programming (FSOP) abuses the vtable dispatch mechanism of `_IO_FILE_plus` structures to hijack control flow. Under the right conditions this gives us an arbitrary call that we can later extend into a stack pivot and a ROP chain.
+**File Stream Oriented Programming (FSOP).** This is about abusing glibc file stream structures to hijack control flow. One way to do this is by corrupting the vtable dispatch mechanism of `_IO_FILE_plus`. Modern glibc validates this vtable, so the obvious approach of replacing it with an arbitrary address don't work.
 
-All experiments here use glibc 2.43, available in modern distros such as Ubuntu 26.04 and Fedora Workstation 44.
+**House of Apple 2** works around this restriction by using a valid `_IO_FILE_plus` vtable to reach the wide-character stream machinery, where a secondary vtable is directly dispatched without range validation. This provides an `arbitrary call` primitive that we can escalate into a stack pivot and a ROP chain.
+
+This repository is a self-contained playground I built after completing the [pwn.college File Struct Exploitation module](https://pwn.college/software-exploitation/file-struct-exploits/). The module is great, but after finishing it I still wanted a deeper and more intuitive understanding of how the different pieces fit together. I also wanted to explore how the techniques from the module translate to latest versions of glibc. All experiments here use glibc 2.43, available in modern distributions such as Ubuntu 26.04 and Fedora Workstation 44.
 
 ## Sandbox environment
 
