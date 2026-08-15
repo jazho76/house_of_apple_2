@@ -6,6 +6,8 @@
 
 ## Sandbox environment
 
+The sandbox is an Ubuntu 26.04 (latest LTS) with glibc 2.43, which is the latest glibc shipped in this distro. This is also the same glibc version in latest Fedora 44, so we can say this is a modern exploitation scenario. This sandbox include some tools like gdb, pwndbg, pwntools, ropper, tmux. There is also a target binary that will allow us to control file stream operations like fopen, fread, fwrite, fclose through an interactive menu while we debug and test our hypothesis.
+
 To build and run the sandbox.
 
 ```
