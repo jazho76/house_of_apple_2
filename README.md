@@ -365,6 +365,8 @@ With this layout, a single compact buffer contains the fake `FILE` structure, th
 
 At this point we have an arbitrary-call primitive but our control over the registers is limited. The next step is to pivot the stack into controlled memory and start a ROP chain.
 
+At `__push___start_context+63` there is a useful `mov rsp, rdx; ret` stack pivot gadget.
+
 ```asm
 pwndbg> disass __push___start_context
 Dump of assembler code for function __push___start_context:
@@ -386,13 +388,13 @@ Dump of assembler code for function __push___start_context:
 End of assembler dump.
 ```
 
-At `__push___start_context+63` there is a useful `mov rsp, rdx; ret` stack pivot gadget. We already know that `RDX` points to the beginning of our controlled `FILE` structure at the time of the arbitrary call. If we call this gadget, `RSP` moves directly into our fake structure and execution continues from the values stored there. That should give us the start of a ROP chain.
+We already know that `RDX` points to the beginning of our controlled `FILE` structure at the time of the arbitrary call. If we call this gadget, `RSP` moves directly into our fake structure and execution continues from the values stored there. That should give us the start of a ROP chain.
 
 ## ROP
 
-One catch, the ROP chain overlaps memory with the fake `FILE` structure, so the field constraints from `_IO_wdoallocbuf` still apply. The first qword overlaps `_flags`, which means its value must not set `_IO_NO_WRITES` (`0x8`). Our first gadget therefore needs an address with bit 3 clear in its least significant byte.
+One catch, the ROP chain overlaps memory with the fake `FILE` structure, so the field constraints from `_IO_wdoallocbuf` still apply. The first qword overlaps `_flags`, which means its value must not set `_IO_NO_WRITES` (`0x8`) or `_IO_UNBUFFERED` (`0x2`). Our first gadget therefore needs an address with those bits clear in its least significant byte.
 
-The `ret` gadget at `_nl_archive_subfreeres+96` should do the trick. It is not a `ret` instruction actually present in the original code at that boundary, but it is a valid mid-instruction gadget at that shifted address. Its least significant byte is `0x00`, so placing the address in `_flags` does not set `_IO_NO_WRITES`.
+The `ret` gadget at `_nl_archive_subfreeres+96` should do the trick. It is not a `ret` instruction actually present in the original code at that boundary, but it is a valid mid-instruction gadget at that shifted address. Its least significant byte is `0x00`, so placing the address in `_flags` does not set `_IO_NO_WRITES` or `_IO_UNBUFFERED`.
 
 ```asm
 pwndbg> tele 0x7f4672919d00 1
@@ -403,10 +405,11 @@ We have two more holes in the chain because `_IO_write_base` and `_IO_buf_base` 
 
 Finally, we cannot overwrite `_lock`, located at offset `0x88`. This leaves us with 17 qwords for the inline ROP chain, which is more than enough to achieve full control of the process.
 
-The ROP layout in `ace.py` is:
+The ROP layout in [./exp/ace.py](./exp/ace.py) is:
 
 ```
-0x00: _nl_archive_subfreeres+96 # pointer to ret instruction with least significant byte as 0x00
+0x00: _nl_archive_subfreeres+96 # pointer to ret instruction
+				# with least significant byte as 0x00
 0x08: pop rdi gadget
 0x10: "/bin/sh" string in libc
 0x18: pop rsi gadget
