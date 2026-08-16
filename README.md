@@ -153,9 +153,9 @@ pwndbg> b *fwrite+216
 Breakpoint 4 at 0x7fd5181d3638: file ./libio/libioP.h, line 1042.
 ```
 
-Oops, execution aborts before reaching the breakpoint. The error suggests that glibc validates the vtable pointer before performing the indirect call. Let's inspect the backtrace and see where this happens.
-
 ![5](./images/5.png)
+
+Execution aborts before reaching the breakpoint. The error suggests that glibc validates the vtable pointer before performing the indirect call. Let's inspect the backtrace and see where this happens.
 
 `fwrite` reaches `_IO_vtable_check` which is rejecting the forged vtable pointer.
 
@@ -165,7 +165,7 @@ The implementation contains a mechanism for accepting foreign vtables, but it is
 
 ### Understanding the vtable validation
 
-By the time `_IO_vtable_check` is called, we're already doomed. The earlier `IO_validate_vtable` frame in the backtrace is the interesting part, so let's inspect that instead.
+By the time `_IO_vtable_check` is called it's already too late, the vtable validation has failed. The earlier `IO_validate_vtable` frame in the backtrace is the interesting part, so let's inspect that instead.
 
 ```c
 pwndbg> disass IO_validate_vtable
@@ -194,7 +194,7 @@ The valid range begins as follows:
 
 ## House of Apple 2
 
-We now understand the basic mechanism and its main constraint: the `_IO_FILE_plus` vtable must point somewhere inside glibc's valid vtable region. This blocks the obvious approach but it does not completely close the door.
+We now understand the basic mechanism and its main constraint, the `_IO_FILE_plus` vtable must point somewhere inside glibc's valid vtable region. This blocks the obvious approach but it does not completely close the door.
 
 House of Apple 2 gets around this by reaching a second vtable through the wide-character stream machinery. This second vtable is not validated in the same way. Let's follow that path in GDB and see how the pieces connect.
 
@@ -309,7 +309,7 @@ In `_IO_wdoallocbuf`:
 - `fp->_wide_data->_IO_buf_base` must be `NULL`
 - `_flags` must not contain `_IO_UNBUFFERED` (`0x0002`)
 
-There is one more detail. `_IO_FILE` contains a `_lock` field that glibc dereferences while acquiring and releasing the stream lock. We need to point it to a zero qword value in writable memory, otherwise the stream operation will crash before reaching our call.
+There is one more detail. `_IO_FILE` contains a `_lock` field that glibc dereferences while acquiring and releasing the stream lock. We need to point it to a zero initialized writable region of 0x10 bytes, otherwise the stream operation will crash before reaching our call.
 
 ## Control flow hijack
 
@@ -319,9 +319,9 @@ Everything is set, let's try again. This time the outer range check passes, and 
 
 The forged structure also satisfies the conditions in `_IO_wfile_overflow`. Execution continues into `_IO_wdoallocbuf`. Finally, the checks in `_IO_wdoallocbuf` pass, and the indirect call at `_IO_wdoallocbuf+55` lands in our `win` function.
 
-![13](./images/13.png)
-
 While we're here, it is worth looking at the register state immediately before the final indirect call.
+
+![13](./images/13.png)
 
 Both `RDI` and `RDX` point to the beginning of the controlled `FILE` structure. We do not directly control the first and third argument registers, but we control the memory they point to. Cool!
 
