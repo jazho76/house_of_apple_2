@@ -1,10 +1,10 @@
 # Exploring House of Apple 2 on modern glibc
 
-This repository is a self-contained playground I built after completing the [pwn.college File Struct Exploitation module](https://pwn.college/software-exploitation/file-struct-exploits/). The module is great, but after finishing it I wanted to explore how these techniques translate to the latest versions of glibc. All experiments here use glibc 2.43, as packaged by Ubuntu 26.04 and Fedora 44 at the time of writing.
+This repository is a self-contained playground inspired by [pwn.college's File Struct Exploitation module](https://pwn.college/software-exploitation/file-struct-exploits/). It does not introduce a new variation of House of Apple 2, it just answers my curiosity about how the technique holds up on recent versions of glibc and whether it remains a viable exploitation path. The document provides an interactive GDB walkthrough that readers can follow alongside the sandbox to develop a more intuitive understanding of the primitive. All experiments use glibc 2.43, as packaged by Ubuntu 26.04 and Fedora 44 at the time of writing.
 
-**File Stream Oriented Programming (FSOP).** This is about abusing glibc file stream structures to hijack control flow. One way to do this is by corrupting the vtable dispatch mechanism of `_IO_FILE_plus`. Modern glibc validates this vtable, so the obvious approach of replacing it with an arbitrary address doesn't work.
+**File Stream Oriented Programming (FSOP).** This is about manipulating glibc file stream structures to hijack control flow. One way to do this is by corrupting the vtable dispatch mechanism of `_IO_FILE_plus`. Modern glibc validates this vtable, so the obvious approach of replacing it with an arbitrary address doesn't work.
 
-**House of Apple 2** works around this restriction by using a valid `_IO_FILE_plus` vtable to reach the wide-character stream machinery, where a secondary vtable is directly dispatched without range validation. This provides an `arbitrary call` primitive that we can escalate into a stack pivot and a ROP chain.
+**House of Apple 2**, originally introduced by [Roderick](https://www.roderickchan.cn/zh-cn/house-of-apple-%E4%B8%80%E7%A7%8D%E6%96%B0%E7%9A%84glibc%E4%B8%ADio%E6%94%BB%E5%87%BB%E6%96%B9%E6%B3%95-2/), works around this restriction by using a valid `_IO_FILE_plus` vtable to reach the wide-character stream machinery, where a secondary vtable is directly dispatched without range validation. This provides an `arbitrary call` primitive that we can escalate into a stack pivot and a ROP chain.
 
 ## Exploitation prerequisites
 
