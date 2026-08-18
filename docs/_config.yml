@@ -1,0 +1,6 @@
+title: "Dissecting House of Apple 2 on modern glibc"
+description: "An interactive GDB walkthrough of House of Apple 2, from FSOP to stack pivot and ROP on glibc 2.43."
+theme: minima
+markdown: kramdown
+kramdown:
+  syntax_highlighter: rouge
