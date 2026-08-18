@@ -1,6 +1,14 @@
-# Exploring House of Apple 2 on modern glibc
+---
+layout: default
+title: "Dissecting House of Apple 2 on modern glibc"
+description: "An interactive GDB walkthrough of House of Apple 2, from FSOP to stack pivot and ROP on glibc 2.43."
+---
 
-This repository is a self-contained playground inspired by [pwn.college's File Struct Exploitation module](https://pwn.college/software-exploitation/file-struct-exploits/). It does not introduce a new variation of House of Apple 2, it just answers my curiosity about how the technique holds up on recent versions of glibc and whether it remains a viable exploitation path. The document provides an interactive GDB walkthrough that readers can follow alongside the sandbox to develop a more intuitive understanding of the primitive. All experiments use glibc 2.43, as packaged by Ubuntu 26.04 and Fedora 44 at the time of writing.
+# Dissecting House of Apple 2 on modern glibc
+
+This is a dissection of House of Apple 2, and also a small excuse to put an interesting exploitation path under the magnifying glass in GDB and understand it end to end. It does not introduce a new variation of the technique; it simply answers my curiosity about how House of Apple 2 holds up on recent versions of glibc and whether it remains a viable exploitation path. The document provides an interactive GDB walkthrough that readers can follow alongside the sandbox to develop a more intuitive understanding of the primitive. All experiments use glibc 2.43, as packaged by Ubuntu 26.04 and Fedora 44 at the time of writing.
+
+> **Interactive lab to follow along with the walkthrough:** [https://github.com/jazho76/house_of_apple_2](https://github.com/jazho76/house_of_apple_2)
 
 **File Stream Oriented Programming (FSOP).** This is about manipulating glibc file stream structures to hijack control flow. One way to do this is by corrupting the vtable dispatch mechanism of `_IO_FILE_plus`. Modern glibc validates this vtable, so the obvious approach of replacing it with an arbitrary address doesn't work.
 
@@ -119,7 +127,7 @@ $4 = {
 
 The pointer targets the `_IO_file_jumps` table.
 
-![3](./images/3.png)
+![3](https://raw.githubusercontent.com/jazho76/house_of_apple_2/main/images/3.png)
 
 This is a set of 21 function pointers. File stream operations dispatch through different entries depending on the execution path.
 
@@ -127,7 +135,7 @@ This is a set of 21 function pointers. File stream operations dispatch through d
 
 For this exploration I'll focus on the `fwrite` path. After placing breakpoints on each function and calling `fwrite`, the first breakpoint we hit is `_IO_file_xsputn`.
 
-![4](./images/4.png)
+![4](https://raw.githubusercontent.com/jazho76/house_of_apple_2/main/images/4.png)
 
 The call happens at `fwrite+216`. This matches the [glibc source](https://elixir.bootlin.com/glibc/glibc-2.43/source/libio/iofwrite.c#L44): `_IO_sputn` is a macro that dispatches through the vtable, resolving to `_IO_file_xsputn` for this stream.
 
@@ -153,13 +161,13 @@ pwndbg> b *fwrite+216
 Breakpoint 4 at 0x7fd5181d3638: file ./libio/libioP.h, line 1042.
 ```
 
-![5](./images/5.png)
+![5](https://raw.githubusercontent.com/jazho76/house_of_apple_2/main/images/5.png)
 
 Execution aborts before reaching the breakpoint. The error suggests that glibc validates the vtable pointer before performing the indirect call. Let's inspect the backtrace and see where this happens.
 
 `fwrite` reaches `_IO_vtable_check` which is rejecting the forged vtable pointer.
 
-![6](./images/6.png)
+![6](https://raw.githubusercontent.com/jazho76/house_of_apple_2/main/images/6.png)
 
 The implementation contains a mechanism for accepting foreign vtables, but it is not under our control. The relevant code is available in [`vtables.c`](https://elixir.bootlin.com/glibc/glibc-2.43/source/libio/vtables.c#L504).
 
@@ -190,7 +198,7 @@ A vtable pointer is accepted only when it falls within `[__io_vtables, __io_vtab
 
 The valid range begins as follows:
 
-![7](./images/7.png)
+![7](https://raw.githubusercontent.com/jazho76/house_of_apple_2/main/images/7.png)
 
 ## House of Apple 2
 
@@ -277,7 +285,7 @@ _IO_wdoallocbuf (FILE *fp)
 
 `_IO_WDOALLOCATE` is another dispatch macro, this time operating through the wide vtable. The indirect call becomes clear in the disassembly:
 
-![8](./images/8.png)
+![8](https://raw.githubusercontent.com/jazho76/house_of_apple_2/main/images/8.png)
 
 Here is the interesting part. At `_IO_wdoallocbuf+44` glibc loads the `_wide_vtable` pointer from `_wide_data`. At `_IO_wdoallocbuf+55` it calls the function pointer at `_wide_vtable + 0x68`. This time there is no range validation.
 
@@ -285,7 +293,7 @@ Here is the interesting part. At `_IO_wdoallocbuf+44` glibc loads the `_wide_vta
 
 Now the pieces start to connect. `_IO_wfile_overflow` belongs to `_IO_wfile_jumps` which exists inside the valid range accepted by the first vtable check. From there, execution can reach another indirect call through the unvalidated `_wide_vtable`.
 
-![9](./images/9.png)
+![9](https://raw.githubusercontent.com/jazho76/house_of_apple_2/main/images/9.png)
 
 ```c
 pwndbg> p &__io_vtables < &_IO_wfile_jumps < (void *)&__io_vtables+0x92f
@@ -315,13 +323,13 @@ There is one more detail. `_IO_FILE` contains a `_lock` field that glibc derefer
 
 Everything is set, let's try again. This time the outer range check passes, and the first indirect call dispatches to `_IO_wfile_overflow`.
 
-![10](./images/10.png)
+![10](https://raw.githubusercontent.com/jazho76/house_of_apple_2/main/images/10.png)
 
 The forged structure also satisfies the conditions in `_IO_wfile_overflow`. Execution continues into `_IO_wdoallocbuf`. Finally, the checks in `_IO_wdoallocbuf` pass, and the indirect call at `_IO_wdoallocbuf+55` lands in our `win` function.
 
 While we're here, it is worth looking at the register state immediately before the final indirect call.
 
-![13](./images/13.png)
+![13](https://raw.githubusercontent.com/jazho76/house_of_apple_2/main/images/13.png)
 
 Both `RDI` and `RDX` point to the beginning of the controlled `FILE` structure. We do not directly control the first and third argument registers, but we control the memory they point to. Cool!
 
@@ -417,7 +425,7 @@ The ROP layout in [./exp/ace.py](./exp/ace.py) is:
 0x50: address to execve		# call execve("/bin/sh", NULL)
 ```
 
-![14](./images/14.png)
+![14](https://raw.githubusercontent.com/jazho76/house_of_apple_2/main/images/14.png)
 
 We have now achieved arbitrary code execution.
 
