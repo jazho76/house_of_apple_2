@@ -20,16 +20,9 @@ This exploration assumes that we can overwrite a `FILE` structure and that we ha
 
 ## Sandbox environment
 
-The sandbox runs Ubuntu 26.04 LTS, giving us a modern environment to explore the technique.
+The sandbox (available in the GitHub repo) runs Ubuntu 26.04 LTS, giving us a modern environment to explore the technique.
 
 The image includes GDB, pwndbg, pwntools, ropper and tmux. It also contains a target binary with an interactive menu for invoking file stream operations such as `fopen`, `fread`, `fwrite`, and `fclose`. This gives us a convenient way to manipulate streams while debugging and testing ideas.
-
-Build and run the sandbox with:
-
-```
-./build.sh
-./run.sh
-```
 
 ## Exploration
 
@@ -335,7 +328,7 @@ Both `RDI` and `RDX` point to the beginning of the controlled `FILE` structure. 
 
 ## Constructing the primitive
 
-The primitive is implemented in [`./exp/house_of_apple2.py`](./exp/house_of_apple2.py). The straightforward approach would be to place a complete `_IO_FILE_plus`, a complete `_IO_wide_data` and a separate fake wide vtable one after another. That would work, but it would also require a rather large buffer.
+The primitive is implemented in [`./exp/house_of_apple2.py`](https://raw.githubusercontent.com/jazho76/house_of_apple_2/main/house_of_apple2.py). The straightforward approach would be to place a complete `_IO_FILE_plus`, a complete `_IO_wide_data` and a separate fake wide vtable one after another. That would work, but it would also require a rather large buffer.
 
 We can make the payload smaller by overlapping them.
 
@@ -413,7 +406,7 @@ We have two more holes in the chain because `_IO_write_base` and `_IO_buf_base` 
 
 Finally, we cannot overwrite `_lock`, located at offset `0x88`. This leaves us with 17 qwords for the inline ROP chain, which is more than enough to achieve full control of the process.
 
-The ROP layout in [./exp/ace.py](./exp/ace.py) is:
+The ROP layout in [https://raw.githubusercontent.com/jazho76/house_of_apple_2/main/exp/ace.py](./exp/ace.py) is:
 
 ```
 0x00: _nl_archive_subfreeres+96 # pointer to ret instruction
