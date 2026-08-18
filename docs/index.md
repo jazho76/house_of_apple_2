@@ -4,8 +4,6 @@ title: "Dissecting House of Apple 2 on modern glibc"
 description: "An interactive GDB walkthrough of House of Apple 2, from FSOP to stack pivot and ROP on glibc 2.43."
 ---
 
-# Dissecting House of Apple 2 on modern glibc
-
 This is a dissection of House of Apple 2, and also a small excuse to put an interesting exploitation path under the magnifying glass in GDB and understand it end to end. It does not introduce a new variation of the technique; it simply answers my curiosity about how House of Apple 2 holds up on recent versions of glibc and whether it remains a viable exploitation path. The document provides an interactive GDB walkthrough that readers can follow alongside the sandbox to develop a more intuitive understanding of the primitive. All experiments use glibc 2.43, as packaged by Ubuntu 26.04 and Fedora 44 at the time of writing.
 
 > **Interactive lab to follow along with the walkthrough:** [https://github.com/jazho76/house_of_apple_2](https://github.com/jazho76/house_of_apple_2)
