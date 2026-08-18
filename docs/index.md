@@ -326,7 +326,7 @@ Both `RDI` and `RDX` point to the beginning of the controlled `FILE` structure. 
 
 ## Constructing the primitive
 
-The primitive is implemented in [`house_of_apple2.py`](https://raw.githubusercontent.com/jazho76/house_of_apple_2/main/exp/house_of_apple2.py). The straightforward approach would be to place a complete `_IO_FILE_plus`, a complete `_IO_wide_data` and a separate fake wide vtable one after another. That would work, but it would also require a rather large buffer.
+The primitive is implemented in [`house_of_apple2.py`](https://github.com/jazho76/house_of_apple_2/blob/main/exp/house_of_apple2.py). The straightforward approach would be to place a complete `_IO_FILE_plus`, a complete `_IO_wide_data` and a separate fake wide vtable one after another. That would work, but it would also require a rather large buffer.
 
 We can make the payload smaller by overlapping them.
 
@@ -404,7 +404,7 @@ We have two more holes in the chain because `_IO_write_base` and `_IO_buf_base` 
 
 Finally, we cannot overwrite `_lock`, located at offset `0x88`. This leaves us with 17 qwords for the inline ROP chain, which is more than enough to achieve full control of the process.
 
-The ROP layout in [ace.py](https://raw.githubusercontent.com/jazho76/house_of_apple_2/main/exp/ace.py) is:
+The ROP layout in [ace.py](https://github.com/jazho76/house_of_apple_2/blob/main/exp/ace.py) is:
 
 ```
 0x00: _nl_archive_subfreeres+96 # pointer to ret instruction
