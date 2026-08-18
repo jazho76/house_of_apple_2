@@ -406,7 +406,7 @@ We have two more holes in the chain because `_IO_write_base` and `_IO_buf_base` 
 
 Finally, we cannot overwrite `_lock`, located at offset `0x88`. This leaves us with 17 qwords for the inline ROP chain, which is more than enough to achieve full control of the process.
 
-The ROP layout in [https://raw.githubusercontent.com/jazho76/house_of_apple_2/main/exp/ace.py](ace.py) is:
+The ROP layout in [ace.py](https://raw.githubusercontent.com/jazho76/house_of_apple_2/main/exp/ace.py) is:
 
 ```
 0x00: _nl_archive_subfreeres+96 # pointer to ret instruction
